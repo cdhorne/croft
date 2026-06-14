@@ -8,6 +8,44 @@
 > local-first mobile app (in the MVP), Obsidian, GitHub web, grep, the CLI. Ethos: **power,
 > convenience, trust** – trust via observability and ownership.
 
+> **Revision 22 (2026-06-14).** **Resolved ADR-0033's two open billing decisions.** (1) **Hosted-
+inference packaging = opt-in *included cap* on C1, one SKU** (not a separate tier): off by default
+(operator-read consent), included up to a monthly cap when enabled, so the naive user gets a complete
+app with no second purchase; **cap-exceeded never blocks capture — it lands raw (Tier 0)**, only
+enrichment degrades (ADR-0004). Tightens ADR-0027. (2) **Entitlement lifecycle:** generous grace (honor
+store/PSP native billing-grace + smart-retry; entitlement active through grace) + **clean revoke on
+refund/chargeback**. Bright line: **billing state gates only the managed convenience — never the user's
+data or the C0 path** (ADR-0001/0032). ADR-0033's lone remaining Open is the web-rail instrument
+(Helcim vs MoR).
+
+> **Revision 21 (2026-06-14).** **Added ADR-0033 (billing & entitlement architecture)** — promotes the
+rev-20 payment-rail note to a full decision. **One server-authoritative entitlement store is the spine;
+payment sources are adapters** (mirrors ADR-0031), keyed to the **Croft account** (ADR-0017) so app +
+web is one entitlement, and encoding the **tier** (custody-only vs +hosted-inference, ADR-0027).
+**App rail = mandatory app-store IAP** (Apple/Google also collect tax + take the 15% small-business cut
+— reuse Fathom's RevenueCat-replacement backend for receipt validation + store server-notifications);
+the **web/CLI PSP/MoR rail is deferred** (Helcim if mostly-Canadian; a Merchant-of-Record if
+international). **Billing is operator-side only — it never touches the user's repo** (ADR-0001), so
+graceful obsolescence holds (losing C1 costs convenience, not data; C0 stays free, ADR-0032). ADR count
+**32 → 33**; ADR-0018 #11 now points to ADR-0033; fixed an ADR-0022 fossil (auth is **v1.1**, not
+"Phase 2").
+
+> **Revision 20 (2026-06-14).** **Dual-audience model made explicit; hosted inference reframed from
+*convenience* to *completeness lever*.** Croft deliberately serves **two audiences that keep each
+other honest:** the **git-native developer** who brings their own agent (Tier-1 BYO over MCP — the
+ADR-0025 wedge) and a **naive, no-agent user** who pays the flat C1 fee and wants the app to enrich
+itself (the maker's less-technical peers are the test cohort). For the no-agent user, **Tier-2 hosted
+inference (v1.2) is the *only* path to enrichment** — BYO-agent, app-as-MCP-host-with-BYO-key, and
+deferred on-device models all require the user to *bring* a model, and on-device *embedding* is search,
+not enrichment — so it is **load-bearing, not optional** for that tier, while staying behind the clean
+Tier-2 extension seam (ADR-0031 #7) for C0/self-host. Amends **ADR-0002** (enrichment locus: where the
+model lives; MCP relocates, doesn't remove, the model question), **ADR-0025** (two audiences; a
+deliberate, modest consumer-ward repositioning), **ADR-0027** (hosted inference = completeness lever
+for the no-agent tier; the highest-margin user). Clarified **ADR-0010** (the on-device *deferral* is
+narrow — only the models; on-device FTS/facets/mirror are in v1). Added **ADR-0018 #11** (payment rail:
+app-store IAP for app signups + a self-hosted subscription backend for web/CLI/C0; billing scoping
+pending).
+
 > **Revision 19 (2026-06-14).** **Edge search moved into v1 at v1.2** (with hosted inference) — the
 managed **rich tier** (ADR-0020): the per-tenant materialized **lexical** FTS + aggregation index
 (ADR-0009) gives the agent/edge rich whole-corpus search; semantic/vectors stay deferred. v1.0/1.1
@@ -153,12 +191,21 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
 
 ### ADR-0002. Three-tier capture; push every interaction to the lowest tier
 
-**Status:** Accepted (rev 3) - **Slug:** `three-tier-capture` - **Tags:** architecture, custody
+**Status:** Accepted (rev 20) - **Slug:** `three-tier-capture` - **Tags:** architecture, custody
 
 - **Decision.** **Tier 0** – CLI -> GitHub directly. **Tier 1** – enriched API: client (Claude)
   enriched; edge validates + commits. **Tier 2** – auto-classify: edge runs a model. **In v1 (C1,
   at v1.2) as guardrailed hosted inference** – opt-in, no-retention, output-observable, small-model +
   capped (ADR-0027); ADR-0018 #5 picks the model.
+- **Where the model lives (rev 20).** Enrichment always needs a model *somewhere*; the tier is just
+  *where it lives*. **Tier 1** = the model the user already brought (their agent over MCP) — free to
+  the operator, but only when capture originates **inside** an agent. **Tier 2** = the operator's
+  model — the **only** enrichment path for an **agent-less** capture (raw app quick-capture,
+  deterministic API, email-in). **MCP relocates this question, it does not remove it:** an app that
+  "pushes to MCP" still needs a model behind it — either the user's BYO key (still requires a model
+  sub) or the operator's (which *is* Tier 2). So for a **no-agent user, hosted inference is
+  load-bearing**, not a convenience (ADR-0025/0027). On-device models would add a third locus but are
+  deferred (ADR-0010); on-device *embedding* is search, not enrichment (ADR-0008/0009).
 - **Consequences.** The ladder is the privacy gradient / trust budget: in-transit operator reads
   only at Tier 2 (ADR-0019). The reader’s on-device LLM (post-MVP) decouples enrichment locus from
   custody locus. Reused on read (ADR-0008).
@@ -359,8 +406,13 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
     filenames/timestamps – are the identity/ordering key** (tolerate clock skew). Store the GitHub
     credential in the platform secure store (iOS Keychain / Android Keystore), scoped to the one
     workspace repo.
-- **Deferred to post-MVP.** On-device embedding + enrichment models (the operator-free node);
-  C0 direct git sync; (the delta/cursor protocol is moot under git – ADR-0022).
+- **Deferred to post-MVP (narrow — only the *models*).** On-device embedding + enrichment models (the
+  operator-free node); C0 direct git sync; (the delta/cursor protocol is moot under git – ADR-0022).
+  **What is *not* deferred:** on-device lexical FTS + faceted aggregation, the local mirror/clone +
+  capture queue — all model-free and **in v1** (ADR-0008). Until on-device enrichment ships, the
+  no-agent app user's enrichment comes from **Tier-2 hosted inference** (ADR-0002/0027); on-device
+  enrichment is its eventual operator-free *replacement*, but only for the app path (not the
+  deterministic-API capture path).
 - **Consequences.** A connected mobile read/write bridge without bundling models – a small but
   *complete* surface for the dogfood loop. The model-powered, operator-free, git-syncing app is the
   post-MVP differentiator (the C0 ownership upgrade).
@@ -490,6 +542,10 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
 1. **Edit conflict-resolution policy – resolved (rev 13):** edge-mediated **SHA-conditional**
    (412 → refetch → reapply), single-user-rare; the device-git divergence guard covers the post-MVP
    git path (ADR-0010/0026).
+1. **Payment rail — detailed in ADR-0033 (rev 21).** The app rail is settled (app-store IAP); the
+   **deferred web/CLI rail's instrument stays open** — **Helcim** if web buyers are mostly Canadian
+   (you own GST/HST), a **Merchant-of-Record** if international (offload global VAT). Also open:
+   grace / dunning policy; refund → entitlement-revocation timing (ADR-0017/0027/0033).
 
 ### ADR-0019. Cost and trust budget
 
@@ -594,7 +650,7 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
    native libgit2 is a benchmark-gated fallback (ADR-0018 #3), not the default.
 1. **Idiomatic standard protocols at each boundary:** **MCP** (agent, spec `2025-11-25`), **HTTP +
    RFC 9457 + Idempotency-Key + cursor** (app/integrators), **git** (storage + device sync),
-   **OAuth 2.1 / CIMD** (auth, Phase 2). No bespoke protocols anywhere. (Idempotency-Key is an
+   **OAuth 2.1 / CIMD** (auth, v1.1). No bespoke protocols anywhere. (Idempotency-Key is an
    expired IETF *draft* + Stripe convention, not a ratified RFC – idiomatic, but not a standard.)
 1. **Distributed-but-identical vocab:** tag normalization (core) runs over a vocab that is in KV
    on the edge and a synced copy on the device, so every capture path normalizes the same way.
@@ -670,7 +726,7 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
 
 ### ADR-0025. Product wedge & competitive positioning
 
-**Status:** Accepted (rev 13) - **Slug:** `wedge-and-positioning` - **Tags:** positioning, north-star, scope
+**Status:** Accepted (rev 20) - **Slug:** `wedge-and-positioning` - **Tags:** positioning, north-star, scope
 
 - **Context.** The category crystallized in 2026 (Karpathy's "LLM wiki" → GBrain at ~22k stars, Basic
   Memory, nanobrain). Croft must state where it is differentiated and where it would be entering a
@@ -679,6 +735,17 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
   on-the-go capture/reading with a desktop-centric, git-native, agent-enriched workflow. Mobile is
   the differentiated front door; the desktop (Obsidian / Claude / CLI / grep) is the reused workshop;
   plain Markdown in the user's git repo is the wire.
+- **Two audiences (rev 20).** Croft deliberately serves **two user types that keep each other
+  honest:** (1) the **git-native developer** who brings their own agent (Tier-1 BYO over MCP) — the
+  wedge above, for whom files-as-truth / observability is the front-of-house pitch; and (2) a **naive,
+  no-agent user** who pays the flat C1 fee and wants the app to enrich itself via **Tier-2 hosted
+  inference** (ADR-0002/0027), for whom the ethos is back-of-house insurance and "it just works" is
+  the pitch. The maker is audience (1) and dogfoods daily; less-technical peers are the audience-(2)
+  test cohort. This is a **deliberate, modest consumer-ward repositioning** — accepted because the two
+  audiences cross-check scope and honesty (the developer keeps it observable/ownable; the civilian
+  keeps it complete and frictionless) and because the no-agent user is the **highest-margin** user
+  (ADR-0027). Consequence: the app's standalone, **agent-free onboarding** is a first-class design
+  surface, not an afterthought.
 - **Files are the truth (non-negotiable).** The Markdown files are the system of record; every
   index/DB is derivable and disposable (tightens ADR-0001/0009). This is the deliberate inverse of
   GBrain (Postgres = truth, Markdown = projection) and of vendor memory (opaque, in-custody). Do not
@@ -728,7 +795,7 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
 
 ### ADR-0027. Graceful obsolescence, longevity & revenue posture
 
-**Status:** Accepted (rev 18) - **Slug:** `longevity-and-revenue` - **Tags:** north-star, custody, distribution, cost
+**Status:** Accepted (rev 20) - **Slug:** `longevity-and-revenue` - **Tags:** north-star, custody, distribution, cost
 
 - **Context.** A tool that asks you to entrust your knowledge must answer: what happens when the
   operator — or the maker — loses interest?
@@ -750,10 +817,18 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
   + longevity mechanism; BYO-model, zero operator read). **C1 managed custody is the paid tier** — a
   small flat subscription for convenience (OAuth + one-click App install, hosted MCP), **~$2–5 CAD
   (even $0.99–$2)**; with **BYO-model** its COGS ≈ the Workers floor. **Hosted inference (Tier 2,
-  v1.2) is an opt-in C1 convenience** with the guardrails below, included up to a cap or as a higher
-  tier so its bounded COGS is covered. **Sell convenience, never access to your own data;** hosted
+  v1.2) is an opt-in C1 feature** with the guardrails below, included in C1 **up to a monthly cap**
+  (opt-in, **one SKU** — not a separate tier; ADR-0033) so its bounded COGS is covered. **Sell convenience, never access to your own data;** hosted
   inference *is* a paid convenience, but BYO-model stays free-of-inference-charge and **C0 stays
   free**. GitHub Sponsors is a legitimate fourth leg for an OSS developer tool.
+- **Hosted inference is the *completeness lever* for the no-agent tier (rev 20).** Reframed from "pure
+  convenience": for the **naive, no-agent user** (ADR-0025 audience 2) it is the **only** path to
+  enrichment — BYO-agent, app-as-MCP-host-with-BYO-key, and deferred on-device models all require the
+  user to *bring* a model (ADR-0002). So it is **load-bearing** for that tier, not optional — yet it
+  stays behind the clean Tier-2 extension seam (ADR-0031 #7) so C0/self-host keeps the raw + BYO path
+  and the operator-read floor. Economically it is the **highest-margin** user: light enrichment is
+  ≈ cents/user/month (ADR-0019) against the $2–10 fee, so few such users cover costs — the civilian
+  who pays *and* uses hosted inference out-monetizes a BYO-model developer (who pays for custody only).
 - **Hosted-inference guardrails (rev 17).** **Privacy:** opt-in, **no-retention, no-train**,
   **output-observable** (the `Model` trailer + plain-MD result *is* the trust mechanism,
   ADR-0001/0007), scoped to captured content; **C0/BYO is the zero-operator-read floor**. **Cost:**
@@ -945,3 +1020,59 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
   The graceful-obsolescence guarantee holds: self-host + fork + eventual full-open conversion.
   npm-published clients (ADR-0023) still carry provenance; FSL/BSL/Apache all allow the `npx` / `npm i`
   path. The closed managed layer is the commercial moat alongside the non-compete term.
+
+### ADR-0033. Billing & entitlement architecture
+
+**Status:** Accepted (rev 22) - **Slug:** `billing-and-entitlement` - **Tags:** billing, distribution, custody, revenue
+
+- **Context.** The paid C1 tier (ADR-0017/0027) needs billing, and buyers arrive through **two
+  origins** — the mobile app and web/CLI — under different platform rules. The maker already has a
+  **self-hosted subscription backend** (Fathom's RevenueCat replacement) to reuse. Name the surface so
+  it stays small and on-ethos.
+- **Decision — one entitlement store; payment sources are adapters (mirrors ADR-0031).**
+  - **The spine is a server-authoritative *entitlement* store** keyed to the **Croft account** (the
+    OAuth / GitHub identity, ADR-0017) — *not* to a store transaction — so a user who buys on the app
+    and on the web is **one** entitlement. It records: is C1 active, which **tier** (custody-only vs
+    +hosted-inference, ADR-0027), and the validity window. The Worker checks it per request; the rest
+    of the system never sees the payment source.
+  - **App rail (v1.1, mandatory IAP).** In-app digital subscriptions **must** use **app-store IAP**
+    (Apple Guideline 3.1.1 / Google Play Billing) — no PSP inside the app for these. **Reuse Fathom's
+    RevenueCat-replacement backend** for server-side **receipt validation** (StoreKit 2 / Play Billing)
+    and subscribe to **store server-notifications** (App Store Server Notifications v2, Google Play
+    RTDN) so renewals / cancels / refunds / billing-retry update entitlement automatically. Apple/Google
+    also **collect and remit sales tax** for IAP and take the **15% small-business cut** (under ~$1M/yr),
+    so the app rail's tax burden is largely handled by the stores. *(Store commercial terms shift —
+    verify at build.)*
+  - **Web/CLI rail (deferred — ADR-0018 #11).** Add **one** PSP/MoR adapter that writes the *same*
+    entitlement store when web paid-demand appears. Web buyers purchase **on the web (out-of-app)**, so
+    in-app anti-steering rules don't bind the web signup. Choice by tax appetite + geography: **Helcim**
+    (Calgary, interchange-plus, CAD-native) if buyers are mostly Canadian and you own GST/HST; a
+    **Merchant-of-Record** (Paddle / Lemon Squeezy) if international sales matter and you want global VAT
+    offloaded.
+  - **Packaging — opt-in *included cap*, one SKU (resolves rev 22; tightens ADR-0027).** Hosted
+    inference (v1.2) is **not a separate tier**: it is **included in C1 up to a monthly cap**, **opt-in**
+    (off by default — the operator-read consent, ADR-0027), so the naive user gets a complete app with
+    no second purchase and the privacy-conscious user leaves it off (base C1 = pure BYO, zero operator
+    read). The cap bounds COGS (cents vs the $2–10 fee). **Cap-exceeded never blocks capture:** past the
+    cap a capture still lands **raw (Tier 0)**, re-enrichable later by an agent — only *enrichment*
+    degrades (ADR-0004). A heavy-user overage / pro cap is a future option, not built now.
+  - **Entitlement lifecycle — generous grace, clean revoke (resolves rev 22).** **Failed renewal
+    (dunning):** honor the store's native **billing grace period** (Apple/Google ~16-day grace /
+    account-hold — respect their server-notifications) and the PSP's smart-retry (~7–14-day grace) on
+    the web rail; entitlement stays **active through grace**, flipping inactive only on final expiry.
+    **Refund / chargeback:** the entitlement store consumes the store/PSP refund signal and **revokes at
+    the refund's effective time** (flag chargebacks operationally). Low-stakes by design (below).
+- **Guardrail (non-negotiable for this surface).** **Billing data is operator-side only — it never
+  touches the user's repo/corpus** (operator-as-processor, ADR-0001). Entitlement is **derivable,
+  disposable state**, not a store of the user's knowledge. **Graceful obsolescence holds:** losing C1 /
+  the operator costs *convenience*, not data — **C0 self-host stays free and billing-free** (ADR-0027/
+  0032); no payment identity is required to own or read the corpus. **Billing state gates only the
+  *managed convenience* — never the user's data or the C0 path; within an active entitlement, capture
+  always succeeds (the cap degrades enrichment, never capture).**
+- **Consequences.** The app ships **IAP-first** (the v1.1 paying cohort is app users); the web rail is
+  **additive**, not a v1.1 blocker. One entitlement store reconciles many sources, so adding a rail is a
+  webhook + an adapter, never a re-architecture. The store cut (15% SBP at our price) is accepted as the
+  cost of the app's distribution + tax handling.
+- **Open.** Only the **web-rail instrument** (Helcim vs Merchant-of-Record, ADR-0018 #11) — decided at
+  web-rail time by then-current geography/tax. *(Packaging, grace/dunning, and refund-revocation are
+  resolved above, rev 22.)*
