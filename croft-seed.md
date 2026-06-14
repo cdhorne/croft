@@ -7,6 +7,15 @@
 > user owns. Reading surfaces: a local-first mobile app (in the MVP), Obsidian, GitHub web, grep,
 > the CLI. Ethos: **power, convenience, trust** – trust via observability and ownership.
 
+> **Revision 12 (2026-06-14).** Prior-art / standards review pass (no strategy change). Corrected
+standards citations in **ADR-0021/0022** (Idempotency-Key is an expired IETF *draft*, not a ratified
+standard; pinned the MCP spec revision `2025-11-25`) and refined the **ADR-0005** precedents (Dublin
+Core `source`/`relation` semantics; Obsidian datetime typing). Added a **sync-divergence guard** –
+non-fast-forward = hard stop, fetch -> merge -> re-push, conflict-copy-as-create, secure on-device
+credential – to **ADR-0010/0015**, and expanded the **ADR-0018 #3** benchmark spec. Open follow-ups
+left for the maker: resolve the ADR-0005 field set; a competitive-positioning ADR (GBrain / Basic
+Memory / nanobrain now occupy adjacent ground); a glossary defining `register`.
+
 > **Revision 11 (2026-06-07).** Added **ADR-0024: project scaffold** – Bun runtime (core/CLI/Worker
 > dev + single-binary build), one pnpm monorepo with the app in-tree, Biome, and build order
 > core -> Worker -> CLI -> app. Hand-authored `CLAUDE.md` produced alongside (the one non-generated
@@ -99,14 +108,22 @@ and read by the agent itself – earns a deliberate human pass up front.
 - **Provenance on edit:** origin fields immutable; current-enrichment fields replaced
   (`model, updated`); the append-only history is git (ADR-0007). No in-file provenance array.
 - **Precedents & alignment.**
-  - **Obsidian Properties** for the frontmatter container – use `tags` (its reserved key),
-    ISO-8601 for `created`/`updated`, avoid reserved-key clashes, so it renders natively in the
-    reader.
+  - **Obsidian Properties** for the frontmatter container – use `tags` (its reserved key, always a
+    YAML **list**, never a comma-string), ISO-8601 for `created`/`updated`, avoid reserved-key
+    clashes (`aliases`, `cssclasses`), so it renders natively in the reader. **Datetime caveat:**
+    Obsidian's native Date & time type is local ISO-8601 *without* a timezone; our UTC `…Z`/offset
+    strings store fine but render as plain Text (no native date-sorting / Bases comparison). Accept
+    that, or store offset-free – decide before the schema calcifies.
   - **Dublin Core** for field semantics – `id`->identifier, `created`->date, `type`->type,
-    `source`->source, `tags`->subject, `context`/`of`->relation.
+    `tags`->subject. **Two mappings need care:** DC `source` means specifically *the resource from
+    which a resource is derived* – only map `source`->`dc:source` if our `source` is a derivation; a
+    capture *channel/origin* belongs in `dcterms:provenance` / the commit trailer, not `dc:source`.
+    For `context`/`of`, prefer the refinements `dcterms:isPartOf` (thread containment, `of`) and
+    `dcterms:references` (loose context) over the generic `relation`.
   - **W3C PROV** for the provenance graph – note `wasDerivedFrom` source; both `wasAttributedTo`
     a model/agent; the capture `wasGeneratedBy` an activity (the thread). Echo the relation names;
-    no need to emit full PROV-O. Conceptual kin: C2PA/Content Credentials; Denote for the id/filename.
+    no need to emit full PROV-O. Keep `thread` consistently an Activity (never also an Entity).
+    Conceptual kin: C2PA/Content Credentials; Denote for the id/filename.
 - **Consequences.** Browse/read excludes `type: context` by default. **(Confirm the field set
   before it calcifies.)**
 
@@ -180,6 +197,18 @@ and read by the agent itself – earns a deliberate human pass up front.
     platform-specific builds and break the core’s pure-isomorphic-TS property.
   - **MVP (C1, app via edge):** may sync HTTP-over-edge to keep v1 simple; the **git path is the
     C0 / post-MVP sync** (app pushes directly with the user’s credential).
+  - **Divergence policy (non-negotiable).** A non-fast-forward push is a **hard stop, never an
+    overwrite** – `force` is forbidden on the write path (silent fast-forward overwrite is the
+    trust-breaking bug every git-backed notes app hits – Obsidian-Git “plows forward”, GitJournal
+    overwrites desktop edits). The write client runs a **fetch -> merge -> re-push loop** as a
+    first-class operation; for two concurrent *creates* the merge is trivial (disjoint files). On
+    the rare same-note edit collision, **write the loser as a new conflict-copy note** (itself a
+    conflict-free create) rather than emitting `<<<<<<<` markers into a body or doing a silent
+    last-write-wins. Keep device/app state **out** of the synced tree (track only `notes/`/`sources/`;
+    Obsidian’s worst conflicts were `workspace.json` churn, not notes). **ULIDs – not wall-clock
+    filenames/timestamps – are the identity/ordering key** (tolerate clock skew). Store the GitHub
+    credential in the platform secure store (iOS Keychain / Android Keystore), scoped to the one
+    workspace repo.
 - **Deferred to post-MVP.** On-device embedding + enrichment models (the operator-free node);
   C0 direct git sync; (the delta/cursor protocol is moot under git – ADR-0022).
 - **Consequences.** Mobile capture + browse/find without bundling models – small surface. The
@@ -241,6 +270,11 @@ and read by the agent itself – earns a deliberate human pass up front.
   **Edits:** SHA-conditional updates; the write client is version-aware from day one; v1 exposes
   **creates only**. **Atomicity:** note + source in one commit (Git Data API tree, or two Contents
   calls for v1 simplicity).
+- **Divergence (clone-holder backend).** Non-fast-forward push is a **hard stop, never `force`**;
+  the write client resolves via **fetch -> merge -> re-push** (ADR-0010). Treat the local commit and
+  the remote push as separate, idempotent, **resumable** stages – on startup, reconcile any local
+  commits ahead of the remote (re-attempt the push; never assume the last session finished). The
+  HTTP Idempotency-Key discipline mirrors this on the device git path.
 - **Open.** Tree vs two Contents calls; edit conflict-resolution policy (ADR-0018).
 
 ### ADR-0016. Index freshness and reader sync
@@ -277,8 +311,10 @@ and read by the agent itself – earns a deliberate human pass up front.
 1. Edge operational observability – logging/tracing, or is data-observability enough?
 1. **RN isomorphic-git validation (go/no-go for pure-JS vs native).** Confirm the fs-adapter
    surface (expo-file-system / react-native-fs: `readFile/writeFile/readdir/stat/lstat/symlink`…)
-   is complete, then benchmark a **`depth:1` clone + pull + push** against a ~20-50k-file corpus on
-   a **mid-range Android** device (not a simulator). Pure-JS is the default; native libgit2 only if
+   is complete – **verify `symlink`/`lstat` explicitly; they are the likeliest RN-fs gaps** – then
+   benchmark a **`depth:1` clone + pull + push *and the fetch -> merge -> re-push loop on a
+   divergent push*** (not just clone/pull/push in isolation) against a ~20-50k-file corpus on a
+   **mid-range Android** device (not a simulator). Pure-JS is the default; native libgit2 only if
    the benchmark fails (ADR-0010/0022). Run this as an early spike – it is load-bearing.
 1. Provenance placement – same-repo `sources/` vs separate repo.
 1. Auto-classify edge model (Tier 2) – Workers AI vs LLM API.
@@ -321,15 +357,21 @@ and read by the agent itself – earns a deliberate human pass up front.
   endpoints** are thin transports over the **same core handlers** – capture/read logic is written
   once.
 - **Tool conventions (MCP).** Each tool = name + description + JSON Schema `inputSchema` +
-  `outputSchema`; return `structuredContent` plus a text fallback; use `isError`.
+  `outputSchema`; return `structuredContent` plus a serialized-JSON text fallback (spec SHOULD, for
+  back-compat); use `isError`. Pin the current spec revision **`2025-11-25`** (the tool shape is
+  stable across recent revisions).
 - **Write.**
   - `capture_enriched(workspace, output{title?, tags[], type, body}, raw?, thread?, idempotency_key?)`
     -> `{id, path, url, applied_tags[]}`. Client pre-enriched (Tier 1); edge normalizes tags
     (core) and commits the note (+ source when `raw` present and distinct).
   - **App/CLI quick-capture** uses the same endpoint with a minimal output (format-only, Tier 0).
 - **Read.** `list_recent(workspace, since?, limit=20)`; `read_note(workspace, id, include_source=false)`; `list_tags(workspace)`; `list_workspaces()`.
-- **Conventions.** Errors -> **RFC 9457 Problem Details** (`type/title/status/detail` +
-  `retryable`). Idempotency -> **Idempotency-Key** (Stripe/IETF). Pagination -> opaque **cursor**.
+- **Conventions.** Errors -> **RFC 9457 Problem Details** (media type `application/problem+json`;
+  `type/title/status/detail` + a custom `retryable` extension member, paired with a standard
+  `Retry-After` header so intermediaries/standard clients see it). Idempotency -> **Idempotency-Key**
+  (Stripe semantics; note the IETF `Idempotency-Key` header is an **expired draft, not a ratified
+  standard** – cite it as such). On a key replayed with a *different* body, return **422 + Problem
+  Details**; document a retention window (24h is a sane default). Pagination -> opaque **cursor**.
 - **App sync.** Via **git** (ADR-0010/0022), not a bespoke API; MVP may use a simple HTTP pull
   through the edge.
 - **Init.** One-time scaffold (CLI `init` or edge bootstrap): create `notes/` + `sources/`, write
@@ -359,9 +401,10 @@ and read by the agent itself – earns a deliberate human pass up front.
    git’s delta protocol and gaining local history – so there is **no bespoke changes-feed/cursor**
    to build (ADR-0010). Pure-JS is viable at our scale (shallow clone; tiny additive files);
    native libgit2 is a benchmark-gated fallback (ADR-0018 #3), not the default.
-1. **Idiomatic standard protocols at each boundary:** **MCP** (agent), **HTTP + RFC 9457 +
-   Idempotency-Key + cursor** (app/integrators), **git** (storage + device sync), **OAuth 2.1 /
-   CIMD** (auth, Phase 2). No bespoke protocols anywhere.
+1. **Idiomatic standard protocols at each boundary:** **MCP** (agent, spec `2025-11-25`), **HTTP +
+   RFC 9457 + Idempotency-Key + cursor** (app/integrators), **git** (storage + device sync),
+   **OAuth 2.1 / CIMD** (auth, Phase 2). No bespoke protocols anywhere. (Idempotency-Key is an
+   expired IETF *draft* + Stripe convention, not a ratified RFC – idiomatic, but not a standard.)
 1. **Distributed-but-identical vocab:** tag normalization (core) runs over a vocab that is in KV
    on the edge and a synced copy on the device, so every capture path normalizes the same way.
 - **Consequences.** Less code, fewer drift surfaces, and every boundary is something readers
