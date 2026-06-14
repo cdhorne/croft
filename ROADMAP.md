@@ -1,7 +1,7 @@
 # Croft — v1 Delivery Roadmap
 
 > Hand-authored planning artifact (like `CLAUDE.md`); **not** generated from the seed. Derived from
-> [`croft-seed.md`](croft-seed.md) **rev 20**. When an ADR changes, update this file. This is the
+> [`croft-seed.md`](croft-seed.md) **rev 21**. When an ADR changes, update this file. This is the
 > input to the agent-sized task breakdown — each phase below is scoped to be handed to agents.
 
 ## What "v1 done" means
@@ -130,14 +130,16 @@ Built on the same core + edge; architected for from day one (multi-tenant + the 
 - **Build:** multi-tenant managed custody — OAuth 2.1 + CIMD, the GitHub App (Contents:rw +
   Metadata:r, one repo), per-request short-lived token minting, onboarding (OAuth + one-click install
   on an auto-created repo), billing (ADR-0017). BYO-model (Tier 1) — no operator inference yet.
-- **Payment rail (ADR-0018 #11, pending scoping).** Two rails by signup origin, but **sequence
-  app-first:** the app's in-app subscription **must** use **app-store IAP** (digital goods; reuse
-  Fathom's RevenueCat-replacement backend for receipt validation + entitlement). The **web/CLI rail is
-  deferred** until web paid-demand appears — then plug **one** PSP webhook into the *same* entitlement
-  store. PSP choice hinges on tax appetite + geography, not processing fee: **Helcim** (Calgary,
-  interchange-plus, CAD-native, cheap) if web buyers are mostly Canadian and you own GST/HST; a
+- **Payment rail (ADR-0033; open items in ADR-0018 #11).** **One entitlement store keyed to the Croft
+  account; payment sources are adapters.** Sequence **app-first:** the app's in-app subscription **must**
+  use **app-store IAP** (digital goods; Apple/Google also collect tax + take the 15% small-business cut;
+  reuse Fathom's RevenueCat-replacement backend for receipt validation + store server-notifications).
+  The **web/CLI rail is deferred** until web paid-demand appears — then plug **one** PSP/MoR webhook into
+  the *same* store. PSP choice hinges on tax appetite + geography, not processing fee: **Helcim**
+  (Calgary, interchange-plus, CAD-native, cheap) if web buyers are mostly Canadian and you own GST/HST; a
   **Merchant-of-Record** (Paddle / Lemon Squeezy) if international web sales matter and you want to
-  offload global VAT. *(Verify current terms — processor pricing / MoR rules shift.)*
+  offload global VAT. **Billing is operator-side only — never touches the user's repo** (ADR-0001).
+  *(Verify current terms — processor / store rules shift.)*
 - **Realizes:** ADR-0017 / 0027. **Exit:** a stranger can sign up, connect their repo, and capture
   via their own Claude — paying ~$2–5 CAD. First external validation + revenue.
 

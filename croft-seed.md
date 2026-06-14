@@ -8,6 +8,18 @@
 > local-first mobile app (in the MVP), Obsidian, GitHub web, grep, the CLI. Ethos: **power,
 > convenience, trust** – trust via observability and ownership.
 
+> **Revision 21 (2026-06-14).** **Added ADR-0033 (billing & entitlement architecture)** — promotes the
+rev-20 payment-rail note to a full decision. **One server-authoritative entitlement store is the spine;
+payment sources are adapters** (mirrors ADR-0031), keyed to the **Croft account** (ADR-0017) so app +
+web is one entitlement, and encoding the **tier** (custody-only vs +hosted-inference, ADR-0027).
+**App rail = mandatory app-store IAP** (Apple/Google also collect tax + take the 15% small-business cut
+— reuse Fathom's RevenueCat-replacement backend for receipt validation + store server-notifications);
+the **web/CLI PSP/MoR rail is deferred** (Helcim if mostly-Canadian; a Merchant-of-Record if
+international). **Billing is operator-side only — it never touches the user's repo** (ADR-0001), so
+graceful obsolescence holds (losing C1 costs convenience, not data; C0 stays free, ADR-0032). ADR count
+**32 → 33**; ADR-0018 #11 now points to ADR-0033; fixed an ADR-0022 fossil (auth is **v1.1**, not
+"Phase 2").
+
 > **Revision 20 (2026-06-14).** **Dual-audience model made explicit; hosted inference reframed from
 *convenience* to *completeness lever*.** Croft deliberately serves **two audiences that keep each
 other honest:** the **git-native developer** who brings their own agent (Tier-1 BYO over MCP — the
@@ -520,12 +532,10 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
 1. **Edit conflict-resolution policy – resolved (rev 13):** edge-mediated **SHA-conditional**
    (412 → refetch → reapply), single-user-rare; the device-git divergence guard covers the post-MVP
    git path (ADR-0010/0026).
-1. **Payment rail (rev 20).** C1 billing splits by signup origin: **app-store IAP** owns
-   app-originated payment (tax / dunning / refunds handled), but **web / CLI / C0 signups never touch
-   an app store** and need a second rail — leaning a **self-hosted subscription backend** (repurpose
-   Fathom's, replacing a RevenueCat-style SDK) for receipt validation + entitlement, plus a
-   Stripe-style path for web/CLI. Mind the iOS anti-steering rules. Full billing scoping pending
-   (ADR-0017/0027).
+1. **Payment rail — detailed in ADR-0033 (rev 21).** The app rail is settled (app-store IAP); the
+   **deferred web/CLI rail's instrument stays open** — **Helcim** if web buyers are mostly Canadian
+   (you own GST/HST), a **Merchant-of-Record** if international (offload global VAT). Also open:
+   grace / dunning policy; refund → entitlement-revocation timing (ADR-0017/0027/0033).
 
 ### ADR-0019. Cost and trust budget
 
@@ -630,7 +640,7 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
    native libgit2 is a benchmark-gated fallback (ADR-0018 #3), not the default.
 1. **Idiomatic standard protocols at each boundary:** **MCP** (agent, spec `2025-11-25`), **HTTP +
    RFC 9457 + Idempotency-Key + cursor** (app/integrators), **git** (storage + device sync),
-   **OAuth 2.1 / CIMD** (auth, Phase 2). No bespoke protocols anywhere. (Idempotency-Key is an
+   **OAuth 2.1 / CIMD** (auth, v1.1). No bespoke protocols anywhere. (Idempotency-Key is an
    expired IETF *draft* + Stripe convention, not a ratified RFC – idiomatic, but not a standard.)
 1. **Distributed-but-identical vocab:** tag normalization (core) runs over a vocab that is in KV
    on the edge and a synced copy on the device, so every capture path normalizes the same way.
@@ -1000,3 +1010,44 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
   The graceful-obsolescence guarantee holds: self-host + fork + eventual full-open conversion.
   npm-published clients (ADR-0023) still carry provenance; FSL/BSL/Apache all allow the `npx` / `npm i`
   path. The closed managed layer is the commercial moat alongside the non-compete term.
+
+### ADR-0033. Billing & entitlement architecture
+
+**Status:** Accepted (rev 21) - **Slug:** `billing-and-entitlement` - **Tags:** billing, distribution, custody, revenue
+
+- **Context.** The paid C1 tier (ADR-0017/0027) needs billing, and buyers arrive through **two
+  origins** — the mobile app and web/CLI — under different platform rules. The maker already has a
+  **self-hosted subscription backend** (Fathom's RevenueCat replacement) to reuse. Name the surface so
+  it stays small and on-ethos.
+- **Decision — one entitlement store; payment sources are adapters (mirrors ADR-0031).**
+  - **The spine is a server-authoritative *entitlement* store** keyed to the **Croft account** (the
+    OAuth / GitHub identity, ADR-0017) — *not* to a store transaction — so a user who buys on the app
+    and on the web is **one** entitlement. It records: is C1 active, which **tier** (custody-only vs
+    +hosted-inference, ADR-0027), and the validity window. The Worker checks it per request; the rest
+    of the system never sees the payment source.
+  - **App rail (v1.1, mandatory IAP).** In-app digital subscriptions **must** use **app-store IAP**
+    (Apple Guideline 3.1.1 / Google Play Billing) — no PSP inside the app for these. **Reuse Fathom's
+    RevenueCat-replacement backend** for server-side **receipt validation** (StoreKit 2 / Play Billing)
+    and subscribe to **store server-notifications** (App Store Server Notifications v2, Google Play
+    RTDN) so renewals / cancels / refunds / billing-retry update entitlement automatically. Apple/Google
+    also **collect and remit sales tax** for IAP and take the **15% small-business cut** (under ~$1M/yr),
+    so the app rail's tax burden is largely handled by the stores. *(Store commercial terms shift —
+    verify at build.)*
+  - **Web/CLI rail (deferred — ADR-0018 #11).** Add **one** PSP/MoR adapter that writes the *same*
+    entitlement store when web paid-demand appears. Web buyers purchase **on the web (out-of-app)**, so
+    in-app anti-steering rules don't bind the web signup. Choice by tax appetite + geography: **Helcim**
+    (Calgary, interchange-plus, CAD-native) if buyers are mostly Canadian and you own GST/HST; a
+    **Merchant-of-Record** (Paddle / Lemon Squeezy) if international sales matter and you want global VAT
+    offloaded.
+- **Guardrail (non-negotiable for this surface).** **Billing data is operator-side only — it never
+  touches the user's repo/corpus** (operator-as-processor, ADR-0001). Entitlement is **derivable,
+  disposable state**, not a store of the user's knowledge. **Graceful obsolescence holds:** losing C1 /
+  the operator costs *convenience*, not data — **C0 self-host stays free and billing-free** (ADR-0027/
+  0032); no payment identity is required to own or read the corpus.
+- **Consequences.** The app ships **IAP-first** (the v1.1 paying cohort is app users); the web rail is
+  **additive**, not a v1.1 blocker. One entitlement store reconciles many sources, so adding a rail is a
+  webhook + an adapter, never a re-architecture. The store cut (15% SBP at our price) is accepted as the
+  cost of the app's distribution + tax handling.
+- **Open.** Final web-rail instrument (Helcim vs MoR, ADR-0018 #11); grace-period / dunning policy;
+  refund → entitlement-revocation timing; whether v1.2 hosted inference is a **separate SKU** or an
+  **included cap** on the C1 tier (ADR-0027).
