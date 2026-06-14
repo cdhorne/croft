@@ -7,6 +7,16 @@
 > user owns. Reading surfaces: a local-first mobile app (in the MVP), Obsidian, GitHub web, grep,
 > the CLI. Ethos: **power, convenience, trust** – trust via observability and ownership.
 
+> **Revision 14 (2026-06-14).** Captured two growth vectors and a read mode after the wedge review.
+**Added** ADR-0029 (ingestion, backfill & corroboration – the mirror of graceful obsolescence; a
+**minimal bulk importer enters v1** as the search/aggregation test-data enabler, ADR-0020/0013;
+format importers + the two-axis corroboration model – GitHub-primary artifact axis reusing existing
+auth, calendar temporal axis, tickets secondary – stay post-MVP) and ADR-0030 (context-collection
+patterns – active/scheduled/prompted capture as a trigger layer over the same handlers). **Extended**
+ADR-0008 with **faceted aggregation** (a sibling read mode over frontmatter facets; light grouping in
+v1, rich post-MVP). **Updated** ADR-0022 (handlers are origin/trigger-agnostic) and ADR-0028
+(corroboration connectors as optional, client-side dependencies).
+
 > **Revision 13 (2026-06-14).** Scope-reconciliation pass after the prior-art + wedge review.
 **Wedge locked:** Croft is the *connected mobile read/write notes client* that bridges on-the-go
 capture/reading with a desktop-centric, git-native, agent-enriched workflow; **files are the truth**
@@ -215,15 +225,22 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
   **Editing `HEAD` is expected; rewriting *history* (force-push) stays protected** – the bright line
   that makes undo/delete safe (you tidy the present, never erase the record).
 
-### ADR-0008. Search: lexical/FTS plus the agent; edge-semantic deferred
+### ADR-0008. Search & aggregation: lexical/FTS + faceted views + the agent; edge-semantic deferred
 
-**Status:** Accepted (rev 5) - **Slug:** `search` - **Tags:** retrieval
+**Status:** Accepted (rev 14) - **Slug:** `search` - **Tags:** retrieval
 
 - **Decision.** **Lexical/tag/FTS, model-free**, and **the agent does the smart part**.
   **Edge-semantic deferred.** In v1 the app runs lexical FTS on-device over its mirror, and Claude
   does agent-augmented search over the read tools – so the edge needs no search engine in v1.
-- **Consequences.** v1 retrieval: app FTS + read tools + Obsidian/grep. Server-side indexing
-  (ADR-0009) is post-MVP.
+- **Faceted aggregation (a sibling read mode, rev 14).** Distinct from FTS (which queries *content*),
+  aggregation queries **frontmatter facets** – `created`/`updated` (time buckets), `tags` (topic),
+  `type` (kind, e.g. `type: todo`). Files are the truth; the grouping is a derived, disposable view.
+  The on-device index carries **facet columns** beside the FTS5 content table, so grouping is a plain
+  SQL `GROUP BY` (ADR-0009/0022). **Reuse Dataview/Datacore on desktop** (build nothing); a faceted
+  `list(group_by, filter)` read tool serves the app/agent (ADR-0021). Light grouping (recent by
+  day/week/tag/type) is v1; rich/saved/custom aggregations are post-MVP.
+- **Consequences.** v1 retrieval: app FTS + faceted grouping + read tools + Obsidian/grep.
+  Server-side indexing (ADR-0009) is post-MVP.
 
 ### ADR-0009. No durable content index: ephemeral per-tenant materialization (post-MVP)
 
@@ -430,10 +447,13 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
 - **In v1.** Shared core (capture + append + bounded correction exposed, ADR-0026); **CLI** (Tier 0);
   **Edge Worker** with the tool surface (ADR-0021); **mobile app** (ADR-0010) – the connected
   **read/write** bridge, no on-device models; GitHub writes via the edge; basic tag normalization;
-  one-time repo init (ADR-0021); read/search via app + Obsidian/grep.
+  one-time repo init (ADR-0021); read/search + **light faceted aggregation** (ADR-0008) via app +
+  Obsidian/grep; a **minimal bulk importer** (ADR-0029) to load a real corpus for search/aggregation
+  testing (ADR-0013).
 - **Deferred.** On-device models; **arbitrary/historical edit** (the *bounded* correction surface is
   in v1); edge search index / per-tenant DO / semantic; Tier-2 auto-classify; **device git-sync
-  (C0)**; all of Phase 2.
+  (C0)**; **format importers + corroboration connectors (ADR-0029) and rich/custom aggregations
+  (ADR-0008)**; all of Phase 2.
 - **Consequences.** Proves the wedge – a **connected mobile read/write bridge** to your own
   git-native corpus, desktop + phone – as a complete dogfood loop, without the heaviest components.
 
@@ -482,7 +502,8 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
    shared core and run in the Worker, the CLI, and the app.
 1. **One handler set, two transports:** capture/read logic is written once as core functions;
    the **MCP tools** (Claude) and the **app’s HTTP endpoints** are thin adapters over them
-   (resolves the ADR-0021 open).
+   (resolves the ADR-0021 open). The handlers are **origin- and trigger-agnostic** – importers,
+   schedulers, and agent hooks are just additional callers (ADR-0029/0030).
 1. **One schema, many uses:** define the convention and tool I/O once (e.g. a TS schema that
    emits JSON Schema); reuse it for MCP `inputSchema`/`outputSchema`, HTTP request validation,
    frontmatter validation, and the conformance test.
@@ -507,7 +528,8 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
   2. **Frontmatter:** port the dependency-free **`yaml`** (eemeli); build the ~20-line `---` splitter
      in core (it owns the envelope). Avoid `gray-matter` (Node `Buffer` deps break workerd/RN).
   3. **FTS:** `bun:sqlite` (FTS5 default) on the CLI, `op-sqlite` (FTS5 flag) on the app; edge search
-     deferred (ADR-0009). Build **one** shared FTS5 schema + query layer; inject the driver per runtime.
+     deferred (ADR-0009). Build **one** shared FTS5 schema + query layer (with frontmatter **facet
+     columns** for aggregation, ADR-0008); inject the driver per runtime.
   4. **Conventions:** adopt Obsidian properties + the GBrain compiled-truth/timeline body shape
      (ADR-0005), keeping Croft's ULID id. Don't invent a format.
   5. **Desktop:** build **no desktop UI** – Obsidian + obsidian-git + Dataview/Datacore + Omnisearch
@@ -674,6 +696,10 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
     files stay readable if it vanishes). **Bun** (dev toolchain only; prod is workerd).
   - **External knob you can't remove (but it only ever slows you):** **GitHub API rate limits**
     (ADR-0019) — mitigate by being frugal (batch / backoff).
+  - **Corroboration connectors (post-MVP, ADR-0029):** **GitHub history reuses the existing GitHub
+    auth — zero new dependency** (the primary artifact source). **Tickets (Jira/Linear) and calendar
+    (Google/Outlook)** are each a net-new, swappable connector – keep them **client-side/agent-driven
+    (Tier 1) and optional**, so they never compromise operator-as-processor or add a hard dependency.
 - **The two genuine risks.**
   1. **isomorphic-git on mobile at scale (post-MVP).** No maintained native-git RN module exists, and
      isomorphic-git has documented packfile-bloat (#2017) in exactly the fetch → merge → re-push loop.
@@ -690,3 +716,54 @@ One canonical name per concept (ADR-0014); no theming. Definitions are derived f
 - **Consequences.** The ownership ethos keeps the genuine-risk bucket nearly empty by design; the two
   exceptions are deferred and pre-mitigated. Watch-list items (Obsidian Interpreter, vendor
   repo-backed memory) live in ADR-0025.
+
+### ADR-0029. Ingestion, backfill & corroboration
+
+**Status:** Proposed (post-MVP; minimal importer in v1) - **Slug:** `ingestion-and-corroboration` - **Tags:** ingestion, provenance, enrichment, scope
+
+- **Context.** Ownership is bidirectional: a corpus must move *in* as cleanly as it moves out (the
+  mirror of graceful obsolescence, ADR-0027). And search/aggregation can't be tuned without corpus
+  volume, so some import is needed early.
+- **The primitive already exists.** A backfill is capture-at-scale with a different origin: raw lands
+  as a `type: context` **source node** (verbatim, observability intact, ADR-0005); the **provenance
+  trailer** records the origin (`Imported-From`/`Import-Of`, ADR-0007); enrichment into a `note` is
+  optional and Tier-1. So "enrich **or at least** include with provenance" maps directly – provenance
+  mandatory, enrichment opt-in. Bulk writes reuse ADR-0019's Git Trees API + tarball path.
+- **Decision.**
+  - **v1 – a minimal bulk importer** (the maker's own notes → convention envelope + import
+    provenance). Its job is to load a real corpus to exercise FTS + faceted aggregation under load
+    (ADR-0008/0013); importing through the real write path *is* the volume test of the pipeline.
+  - **Post-MVP – format importers** as adapters: GBrain repos (Croft already reads its files),
+    vendor-memory exports (Claude/ChatGPT – the ADR-0025 complement made literal), loose Markdown /
+    logbooks / daily dumps. Each is a convention→convention mapping into the versioned envelope
+    (ADR-0012).
+  - **Post-MVP – corroboration, two axes.** **Artifact axis ("what was done"):** GitHub history
+    (**primary; reuses the existing GitHub auth – zero new dependency**) → tickets (secondary, richer
+    per-item context). **Temporal axis ("when a decision was made"):** calendar (Google/Outlook).
+    Corroborating artifacts are themselves **source nodes**; the agent (Tier 1) fetches and
+    correlates, the operator only commits – trust budget preserved (ADR-0002/0019).
+- **Guardrail (non-negotiable for this surface).** Croft provides the convention + ingestion
+  interface + provenance discipline; importers and corroboration connectors are **agent-side,
+  optional adapters**. The operator stays a thin processor – **Croft is not an integration platform.**
+- **Consequences.** Graceful *onboarding* to match graceful obsolescence. Connector dependency growth
+  is tracked in ADR-0028; the primary (GitHub) corroboration source adds none.
+
+### ADR-0030. Context-collection patterns (active capture)
+
+**Status:** Proposed (post-MVP) - **Slug:** `context-collection` - **Tags:** capture, ergonomics, scope
+
+- **Context.** Beyond passive capture, the high-value lever is *proactively* collecting structured
+  context – daily summaries, meeting outcomes, project deliveries – by intelligently prompting or
+  scheduling.
+- **Decision.** A **trigger + prompt-template layer over the existing write surface**, not new
+  storage: a daily summary / meeting outcome / project delivery is still a **create or append**
+  (ADR-0026). What's new is *when* and *how* capture is invoked:
+  - **Triggers:** scheduled (CLI cron, scheduled Worker), event-driven (agent / Claude-Code session
+    hooks – nanobrain's session-end hook + idle drainer is the precedent), and mobile reminders /
+    notifications.
+  - **Prompt templates** per pattern (daily / meeting / project), which the agent fills.
+  - All triggers are just **callers of the same capture/append handlers** (ADR-0021/0022) – origin-
+    and trigger-agnostic.
+- **Consequences.** Reduces capture friction with no new storage concepts and no operator involvement
+  (client/agent-driven). The only v1 design hook (already satisfied): a trigger-agnostic capture
+  surface.

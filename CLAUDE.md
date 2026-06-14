@@ -8,7 +8,7 @@ lockdown or encryption.
 
 ## Source of truth
 
-The full decision record is **[`croft-seed.md`](croft-seed.md)** — 28 ADRs. This file carries only
+The full decision record is **[`croft-seed.md`](croft-seed.md)** — 30 ADRs. This file carries only
 what must be held in working memory every session. **When this file and an ADR disagree, the ADR
 wins** (and fix this file). The `docs/adr/` tree, `docs/philosophy.md`, and `docs/architecture.md`
 are **generated from the seed doc** at `croft init` — don’t hand-edit generated files; change the
