@@ -7,6 +7,20 @@
 > user owns. Reading surfaces: a local-first mobile app (in the MVP), Obsidian, GitHub web, grep,
 > the CLI. Ethos: **power, convenience, trust** – trust via observability and ownership.
 
+> **Revision 13 (2026-06-14).** Scope-reconciliation pass after the prior-art + wedge review.
+**Wedge locked:** Croft is the *connected mobile read/write notes client* that bridges on-the-go
+capture/reading with a desktop-centric, git-native, agent-enriched workflow; **files are the truth**
+(the inverse of GBrain's DB-as-truth projection). **Scope amended** (ADR-0004/0010/0015/0020): v1 is
+creates **+ append + a bounded correction surface** (edit-recent / undo / delete); mobile is
+**read/write** (v1 writes ride the edge; device git-sync is the C0 / post-MVP ownership upgrade).
+**Build order reordered** (ADR-0024) so the app is no longer strictly last. **Added** ADR-0025 (wedge
+& positioning), 0026 (operation vocabulary & bounded mutation), 0027 (graceful obsolescence,
+longevity & revenue), 0028 (dependency & risk register). **Resolved** ADR-0018 #8 (edge-first sync)
+and #10 (edge SHA-conditional edit policy); **settled** the ADR-0005 field set (minimal-core /
+open-extension) and adopted the compiled-truth + append-only-timeline body shape; **folded** concrete
+port choices into ADR-0022; **added** a Glossary. Three frontmatter tensions are resolved with
+leanings and flagged for review (ADR-0005 Open).
+
 > **Revision 12 (2026-06-14).** Prior-art / standards review pass (no strategy change). Corrected
 standards citations in **ADR-0021/0022** (Idempotency-Key is an expired IETF *draft*, not a ratified
 standard; pinned the MCP spec revision `2025-11-25`) and refined the **ADR-0005** precedents (Dublin
@@ -42,12 +56,31 @@ static file tree that drifts. Concretely:
 - **Draft `docs/philosophy.md` and `docs/architecture.md`** from this doc for human review.
 1. **Honor statuses:** Accepted -> locked; Proposed -> resolve before first implementation; Open
    -> tracked in 0018; Withdrawn -> placeholder.
-1. **One canonical name per concept:** `capture - source - note - thread - tier - register - reader - agent`. No theming.
+1. **One canonical name per concept:** `capture - source - note - thread - tier - register - reader - agent - workspace` (see **Glossary**). No theming.
 
 Rationale: the mechanical and derivable artifacts (ADR tree, index, orientation prose) are exactly
 what Claude Code does reliably from a clear spec, and generating them in-repo keeps them downstream
 of one source instead of a second hand-maintained copy. Only `CLAUDE.md` – small, load-bearing,
 and read by the agent itself – earns a deliberate human pass up front.
+
+-----
+
+## Glossary
+
+One canonical name per concept (ADR-0014); no theming. Definitions are derived from the ADRs.
+
+- **capture** – the act/event of submitting input that becomes a note; pushed to the lowest tier (ADR-0002).
+- **source** – the raw-as-captured node (verbatim original, `type: context`); conditional, excluded from browse (ADR-0005).
+- **note** – the system-of-record record in `notes/`; body may be model-phrased (ADR-0005).
+- **thread** – the one authored lineage edge grouping related captures/notes; a PROV Activity (ADR-0006).
+- **tier** – the capture tier (0 CLI-direct · 1 client-enriched · 2 edge-auto-classify) = the privacy/trust gradient (ADR-0002).
+- **register** – **UNDEFINED in the source material – flag for the maker.** Two plausible readings:
+  (a) the append-only dated *evidence log* below the compiled-truth line in a note (a "register" of
+  events, ADR-0005/0026); (b) the *voice/register* an enriched body is rendered in. Confirm a
+  definition or drop it from the canonical set.
+- **reader** – a read surface over the corpus: the mobile app, Obsidian, GitHub web, grep, the CLI (ADR-0010).
+- **agent** – the AI (e.g. Claude) that enriches captures over the MCP tool surface (ADR-0002/0021).
+- **workspace** – one notes repo = one workspace; one repo per workspace (ADR-0003).
 
 -----
 
@@ -90,21 +123,48 @@ and read by the agent itself – earns a deliberate human pass up front.
 
 **Status:** Accepted (rev 4) - **Slug:** `file-per-note` - **Tags:** storage, concurrency
 
-- **Decision.** **New file per note.** **Captures are creates** (conflict-free). **Edits are
-  conditional updates** (ADR-0015); notes and raw sources editable.
-- **Consequences.** Conflict-freedom absolute for captures; edits use optimistic concurrency.
-  **Rejected – daily-file consolidation.** Narrative docs stay single-file.
+- **Decision.** **New file per note.** **Captures are creates** (conflict-free). v1 also exposes a
+  **bounded mutation surface** (ADR-0026): **append** (a dated block to a note's timeline –
+  near-conflict-free) and a **correction surface** – **edit-recent / undo / delete** – for cleaning
+  up erroneously submitted content. Mutations are **SHA-conditional updates** (ADR-0015);
+  arbitrary/historical editing stays gated.
+- **Consequences.** Conflict-freedom absolute for captures and near-absolute for appends; the
+  correction surface is recency-scoped and edge-mediated, so single-writer conflict risk is ~zero
+  (ADR-0026). Undo/delete are **new commits** – history preserves everything, so they tidy `HEAD`
+  without rewriting the record (ADR-0007). **Rejected – daily-file consolidation.** Narrative docs
+  stay single-file.
 
 ### ADR-0005. Data model: note (record) + conditional source (provenance); both editable
 
 **Status:** Accepted (rev 7) - **Slug:** `data-model-note-and-source` - **Tags:** data-model
 
 - **Decision.**
-  - **Note** (`notes/...`): system of record; body may be model-phrased. Frontmatter:
-    `id, created, tags[], workspace, source, context, thread, updated, v`.
+  - **Note** (`notes/...`): system of record; body may be model-phrased.
   - **Source** (`sources/...`): the raw as captured (verbatim original in git); excluded from
     browse. Frontmatter: `id, type: context, of, created, source, model, updated`.
   - Verbatim raw lives only in the source node; the source node is **conditional**.
+- **Frontmatter discipline (minimal-core / open-extension).** A small **conformance-guarded
+  required set** (ADR-0011) plus **tolerant pass-through** of unknown keys (forward- and
+  community-compatible – Dataview/Datacore can use them; never validate-strip), Obsidian-property-
+  shaped for free native rendering. For the **note**:
+  - **MUST:** `id` (ULID; stable identity decoupled from filename/title; time-ordered, so it doubles
+    as a sort key), `v` (convention version, ADR-0012), `created` (ISO-8601), `tags` (a **list** –
+    Obsidian-reserved, DC:subject).
+  - **SHOULD:** `updated` (earns its place now that correct/edit is in v1), `type` (separates note
+    from `source`, drives browse-exclusion; not an Obsidian-reserved key).
+  - **COULD:** `aliases` (Obsidian-native; alt-name resolution for the connected/wikilink model),
+    `thread` (the one authored edge, ADR-0006), `title` (optional; H1/filename often suffices),
+    `workspace`, `source` (an in-file *pointer* to the source node).
+  - **SHOULD NOT:** in-file provenance arrays or history (git owns this, ADR-0007); derived/computed
+    data (backlinks, `related`, edge types, ranking – computed, ADR-0006); operator/device/sync
+    state (the Obsidian `workspace.json` lesson); secrets/encryption; redefinitions of reserved keys.
+- **Body convention (adopted rev 13).** The **compiled-truth-above / append-only-timeline-below**
+  page shape (the Karpathy "LLM wiki" / GBrain pattern): current best understanding above a `---`
+  rule; an append-only dated evidence log below (`- **YYYY-MM-DD** | source — what happened`). The
+  **timeline is the append target** (ADR-0026) – on-ethos because it is additive, not a rewrite.
+  Divergence from GBrain: GBrain *rewrites* compiled truth in place against a Postgres truth; Croft's
+  truth is the file + git history, and rewriting compiled truth is the gated edit path, not a v1
+  default.
 - **Provenance on edit:** origin fields immutable; current-enrichment fields replaced
   (`model, updated`); the append-only history is git (ADR-0007). No in-file provenance array.
 - **Precedents & alignment.**
@@ -124,8 +184,17 @@ and read by the agent itself – earns a deliberate human pass up front.
     a model/agent; the capture `wasGeneratedBy` an activity (the thread). Echo the relation names;
     no need to emit full PROV-O. Keep `thread` consistently an Activity (never also an Entity).
     Conceptual kin: C2PA/Content Credentials; Denote for the id/filename.
-- **Consequences.** Browse/read excludes `type: context` by default. **(Confirm the field set
-  before it calcifies.)**
+- **Consequences.** Browse/read excludes `type: context` by default. The required set is the only
+  thing the conformance test (ADR-0011) guards; everything else passes through.
+- **Open (resolved rev 13 with leanings – flagged for maker review).**
+  1. **`workspace` field vs repo==workspace (ADR-0003):** *keep* it – cheap, and it makes a note
+     self-describing if it ever moves between repos. (Lean: keep.)
+  2. **`source` frontmatter pointer vs commit trailer:** *split* – the provenance **event** lives in
+     the commit trailer (ADR-0007); an in-file **pointer** to the source node stays in frontmatter
+     for Obsidian-link navigation. (Resolve the DC `source` semantic alongside.)
+  3. **`created` datetime format:** *ISO-8601 UTC with `Z`* (house standard, portable), leaning on
+     the time-ordered ULID for sorting and accepting that Obsidian renders the string as Text. (Lean:
+     UTC-`Z`; offset-free would buy native Obsidian Date typing at a portability cost.)
 
 ### ADR-0006. Lineage: authored note<->source and thread; related is computed; history in git
 
@@ -143,8 +212,11 @@ and read by the agent itself – earns a deliberate human pass up front.
 
 - **Decision.** The **git commit history is the append-only, immutable record**. **Force-push
   protection is a sensible default, not a hard gate.** **Provenance in a commit trailer on every
-  write** (`Source`, `Capture-Id`/`Edit-Of`, `Model`).
+  write** (`Source`, `Capture-Id`/`Edit-Of`, `Model`, plus `Undo-Of`/`Delete-Of` for the correction
+  surface, ADR-0026) – so even deletions are first-class, attributable events.
 - **Consequences.** Per-note history meaningful. Read the file for current state, git for history.
+  **Editing `HEAD` is expected; rewriting *history* (force-push) stays protected** – the bright line
+  that makes undo/delete safe (you tidy the present, never erase the record).
 
 ### ADR-0008. Search: lexical/FTS plus the agent; edge-semantic deferred
 
@@ -168,16 +240,23 @@ and read by the agent itself – earns a deliberate human pass up front.
   means no freshness problem. Persisted/vector stores are deferred – vectors + ids only, never raw
   bodies.
 
-### ADR-0010. Reader: a local-first mobile app (in the MVP, small surface)
+### ADR-0010. The mobile app: a connected local-first read/write bridge (MVP wedge)
 
-**Status:** Accepted (rev 8) - **Slug:** `reader-app` - **Tags:** app, offline, retrieval
+**Status:** Accepted (rev 13) - **Slug:** `reader-app` - **Tags:** app, offline, retrieval
 
+- **The wedge (rev 13).** The mobile app is the **differentiated surface**: a connected, local-first
+  **read/write** client that bridges on-the-go capture/reading with the desktop-centric, git-native,
+  agent-enriched workflow (Obsidian / Claude / CLI / grep). The desktop is the workshop (reused), the
+  phone is the front door. It is still *not* a full editor or knowledge graph.
 - **MVP surface (mindful).**
-  - **Three core screens:** capture, browse/search, read. Feature-minimal – a reader + capture
-    point, never an editor or knowledge graph.
+  - **Core screens:** capture, browse/search, read, **and a bounded correction surface**
+    (edit-recent / undo / delete, ADR-0026). Feature-minimal – still never a full editor or graph.
   - **Offline-first:** a **local mirror (clone)** + a **local capture queue**.
   - **Lexical/FTS search on-device** (op-sqlite, model-free) over the mirror (ADR-0008/0009).
-  - **App captures are Tier-0-style (raw / format-only)**; enriched capture comes from Claude/MCP.
+  - **Writes ride the edge in v1.** App writes (capture/append/correct/undo/delete) go through the
+    Worker over HTTP, so edits are **edge-mediated SHA-conditional** (a tractable 412 → refetch →
+    reapply, not a device git merge); enriched capture comes from Claude/MCP, quick-capture is
+    Tier-0-style.
   - **Stack:** native Expo React Native, reusing Fathom’s local-first (op-sqlite) patterns.
 - **Sync via git itself (idiomatic; ADR-0022).** The app holds a clone and uses **isomorphic-git**
   (pure-JS, no native deps) to fetch/pull/push – reusing git’s delta protocol and gaining local
@@ -197,8 +276,8 @@ and read by the agent itself – earns a deliberate human pass up front.
     platform-specific builds and break the core’s pure-isomorphic-TS property.
   - **MVP (C1, app via edge):** may sync HTTP-over-edge to keep v1 simple; the **git path is the
     C0 / post-MVP sync** (app pushes directly with the user’s credential).
-  - **Divergence policy (non-negotiable).** A non-fast-forward push is a **hard stop, never an
-    overwrite** – `force` is forbidden on the write path (silent fast-forward overwrite is the
+  - **Divergence policy (non-negotiable; the device git-sync path, post-MVP).** A non-fast-forward
+    push is a **hard stop, never an overwrite** – `force` is forbidden on the write path (silent fast-forward overwrite is the
     trust-breaking bug every git-backed notes app hits – Obsidian-Git “plows forward”, GitJournal
     overwrites desktop edits). The write client runs a **fetch -> merge -> re-push loop** as a
     first-class operation; for two concurrent *creates* the merge is trivial (disjoint files). On
@@ -211,8 +290,9 @@ and read by the agent itself – earns a deliberate human pass up front.
     workspace repo.
 - **Deferred to post-MVP.** On-device embedding + enrichment models (the operator-free node);
   C0 direct git sync; (the delta/cursor protocol is moot under git – ADR-0022).
-- **Consequences.** Mobile capture + browse/find without bundling models – small surface. The
-  model-powered, operator-free, git-syncing app is the post-MVP differentiator.
+- **Consequences.** A connected mobile read/write bridge without bundling models – a small but
+  *complete* surface for the dogfood loop. The model-powered, operator-free, git-syncing app is the
+  post-MVP differentiator (the C0 ownership upgrade).
 
 ### ADR-0011. One isomorphic core enforces the convention and owns the engine
 
@@ -267,15 +347,17 @@ and read by the agent itself – earns a deliberate human pass up front.
 **Status:** Accepted (rev 6) - **Slug:** `write-path-atomicity-idempotency` - **Tags:** write-path
 
 - **Decision.** **Idempotency:** a generated **ULID** id (+ optional client idempotency key).
-  **Edits:** SHA-conditional updates; the write client is version-aware from day one; v1 exposes
-  **creates only**. **Atomicity:** note + source in one commit (Git Data API tree, or two Contents
-  calls for v1 simplicity).
+  **Mutations:** SHA-conditional updates; the write client is version-aware from day one; v1 exposes
+  **creates + append + a bounded correction surface** (edit-recent / undo / delete, ADR-0026);
+  arbitrary/historical editing stays gated. **Atomicity:** note + source in one commit (Git Data API
+  tree, or two Contents calls for v1 simplicity); delete/undo remove note (+ its source) in one commit.
 - **Divergence (clone-holder backend).** Non-fast-forward push is a **hard stop, never `force`**;
   the write client resolves via **fetch -> merge -> re-push** (ADR-0010). Treat the local commit and
   the remote push as separate, idempotent, **resumable** stages – on startup, reconcile any local
   commits ahead of the remote (re-attempt the push; never assume the last session finished). The
   HTTP Idempotency-Key discipline mirrors this on the device git path.
-- **Open.** Tree vs two Contents calls; edit conflict-resolution policy (ADR-0018).
+- **Open.** Tree vs two Contents calls; edit conflict-resolution policy (resolved ADR-0018 #10 –
+  edge SHA-conditional, single-user-rare).
 
 ### ADR-0016. Index freshness and reader sync
 
@@ -315,16 +397,20 @@ and read by the agent itself – earns a deliberate human pass up front.
    benchmark a **`depth:1` clone + pull + push *and the fetch -> merge -> re-push loop on a
    divergent push*** (not just clone/pull/push in isolation) against a ~20-50k-file corpus on a
    **mid-range Android** device (not a simulator). Pure-JS is the default; native libgit2 only if
-   the benchmark fails (ADR-0010/0022). Run this as an early spike – it is load-bearing.
+   the benchmark fails (ADR-0010/0022). Run this as an early spike – it is load-bearing. **Off the
+   v1 critical path** (v1 writes ride the edge, ADR-0010); it gates the device git-sync upgrade.
 1. Provenance placement – same-repo `sources/` vs separate repo.
 1. Auto-classify edge model (Tier 2) – Workers AI vs LLM API.
 1. Skill vs in-repo split nuance (ADR-0014).
 1. **Name follow-through (Croft chosen, ADR-0014).** Confirm a free GitHub org qualifier
    (`croft-dev` / `croftlabs` / `getcroft`) and register a domain (`croft.app` / `getcroft.com`);
    npm `croft` already free. Lara Croft is an accepted out-of-class shadow.
-1. App-sync default – C0 vs C1 (ADR-0010/0017). Lean C0.
+1. **App-sync default – resolved (rev 13):** v1 reads+writes ride the **edge HTTP** path; device
+   **git-sync is the C0 / post-MVP** ownership upgrade (ADR-0010).
 1. On-device enrichment model – which model/size/quantization (post-MVP).
-1. Edit conflict-resolution policy (ADR-0015).
+1. **Edit conflict-resolution policy – resolved (rev 13):** edge-mediated **SHA-conditional**
+   (412 → refetch → reapply), single-user-rare; the device-git divergence guard covers the post-MVP
+   git path (ADR-0010/0026).
 
 ### ADR-0019. Cost and trust budget
 
@@ -336,18 +422,23 @@ and read by the agent itself – earns a deliberate human pass up front.
   API + tarball) – the constraint is GitHub’s rate limit, not dollars.
 - **Trust budget:** in-transit operator reads only at Tier 2; the operator-free C0 reader touches
   the operator at no point.
+- **Revenue posture (ADR-0027).** Inference is client-side (Tier 1) and storage is the user's repo,
+  so operator COGS ≈ the Workers floor – revenue need is low by design; the paid tier sells
+  *convenience* (managed custody), never access to your own data.
 
 ### ADR-0020. MVP scope (Phase 1, v1)
 
 **Status:** Accepted (rev 6) - **Slug:** `mvp-scope` - **Tags:** scope, phasing
 
-- **In v1.** Shared core (creates exposed); **CLI** (Tier 0); **Edge Worker** with the tool surface
-  (ADR-0021); **mobile app** (ADR-0010) small surface, no on-device models; GitHub creates; basic
-  tag normalization; one-time repo init (ADR-0021); read/search via app + Obsidian/grep.
-- **Deferred.** On-device models; edits as an exposed op; edge search index / per-tenant DO /
-  semantic; Tier-2 auto-classify; C0 git sync; all of Phase 2.
-- **Consequences.** Proves the wedge (capture + your-own-repo, desktop + phone) without the heaviest
-  components.
+- **In v1.** Shared core (capture + append + bounded correction exposed, ADR-0026); **CLI** (Tier 0);
+  **Edge Worker** with the tool surface (ADR-0021); **mobile app** (ADR-0010) – the connected
+  **read/write** bridge, no on-device models; GitHub writes via the edge; basic tag normalization;
+  one-time repo init (ADR-0021); read/search via app + Obsidian/grep.
+- **Deferred.** On-device models; **arbitrary/historical edit** (the *bounded* correction surface is
+  in v1); edge search index / per-tenant DO / semantic; Tier-2 auto-classify; **device git-sync
+  (C0)**; all of Phase 2.
+- **Consequences.** Proves the wedge – a **connected mobile read/write bridge** to your own
+  git-native corpus, desktop + phone – as a complete dogfood loop, without the heaviest components.
 
 ### ADR-0021. Tool & sync contract (MVP)
 
@@ -365,6 +456,10 @@ and read by the agent itself – earns a deliberate human pass up front.
     -> `{id, path, url, applied_tags[]}`. Client pre-enriched (Tier 1); edge normalizes tags
     (core) and commits the note (+ source when `raw` present and distinct).
   - **App/CLI quick-capture** uses the same endpoint with a minimal output (format-only, Tier 0).
+  - **Correction surface** (ADR-0026): `append(workspace, id, block)`; `correct(workspace, id, output, base_sha)`;
+    `delete(workspace, id, reason?)` / `undo(workspace, capture_id)` – edge-mediated, SHA-conditional,
+    recency-scoped; delete/undo remove the note (+ its source) in one commit with an
+    `Undo-Of`/`Delete-Of` trailer (ADR-0007).
 - **Read.** `list_recent(workspace, since?, limit=20)`; `read_note(workspace, id, include_source=false)`; `list_tags(workspace)`; `list_workspaces()`.
 - **Conventions.** Errors -> **RFC 9457 Problem Details** (media type `application/problem+json`;
   `type/title/status/detail` + a custom `retryable` extension member, paired with a standard
@@ -372,8 +467,8 @@ and read by the agent itself – earns a deliberate human pass up front.
   (Stripe semantics; note the IETF `Idempotency-Key` header is an **expired draft, not a ratified
   standard** – cite it as such). On a key replayed with a *different* body, return **422 + Problem
   Details**; document a retention window (24h is a sane default). Pagination -> opaque **cursor**.
-- **App sync.** Via **git** (ADR-0010/0022), not a bespoke API; MVP may use a simple HTTP pull
-  through the edge.
+- **App sync.** Via **git** (ADR-0010/0022), not a bespoke API; v1 reads+writes ride a simple HTTP
+  path through the edge (device git-sync is the C0 / post-MVP upgrade).
 - **Init.** One-time scaffold (CLI `init` or edge bootstrap): create `notes/` + `sources/`, write
   the convention version, seed an empty KV vocab, store the PAT + path-secret (Phase 1).
 - **Open.** Final field names/shapes.
@@ -407,6 +502,21 @@ and read by the agent itself – earns a deliberate human pass up front.
    expired IETF *draft* + Stripe convention, not a ratified RFC – idiomatic, but not a standard.)
 1. **Distributed-but-identical vocab:** tag normalization (core) runs over a vocab that is in KV
    on the edge and a synced copy on the device, so every capture path normalizes the same way.
+- **Concrete port choices (rev 13 – build-vs-port audit).** Most of the stack is ported; the genuine
+  build is the convention core + two thin seams.
+  1. **MCP:** port `@modelcontextprotocol/sdk` + Cloudflare **`createMcpHandler`** (stateless, **no
+     Durable Object** – stays inside ADR-0020); write only tool handlers + the shared Zod schemas.
+     *Avoid `McpAgent`* (it pulls in DOs).
+  2. **Frontmatter:** port the dependency-free **`yaml`** (eemeli); build the ~20-line `---` splitter
+     in core (it owns the envelope). Avoid `gray-matter` (Node `Buffer` deps break workerd/RN).
+  3. **FTS:** `bun:sqlite` (FTS5 default) on the CLI, `op-sqlite` (FTS5 flag) on the app; edge search
+     deferred (ADR-0009). Build **one** shared FTS5 schema + query layer; inject the driver per runtime.
+  4. **Conventions:** adopt Obsidian properties + the GBrain compiled-truth/timeline body shape
+     (ADR-0005), keeping Croft's ULID id. Don't invent a format.
+  5. **Desktop:** build **no desktop UI** – Obsidian + obsidian-git + Dataview/Datacore + Omnisearch
+     *is* the desktop surface; Croft's own app exists because obsidian-git is unstable *on mobile*.
+  - **The genuine build:** the convention/conformance envelope (ADR-0011/0012), the shared FTS layer,
+    and the version-aware write-client interface. Everything around them is off-the-shelf.
 - **Consequences.** Less code, fewer drift surfaces, and every boundary is something readers
   (Obsidian), clients (MCP hosts), and integrators (HTTP/git) already speak – alignment is both
   cheaper and more observable. The conformance test (ADR-0011) guards the one place reuse must be
@@ -450,9 +560,136 @@ and read by the agent itself – earns a deliberate human pass up front.
     `apps/mobile`). Accept the Metro-vs-Worker build friction in exchange for one source tree and a
     shared core consumed without publishing.
   - **Lint/format: Biome** (house standard); TypeScript strict.
-  - **Build order: core -> Worker -> CLI -> app.** Core first (convention, schema, write-client
-    interface, FTS); the Worker next as the MCP tool surface + HTTP, which is the live-dogfood
-    harness (ADR-0013); CLI and app follow.
+  - **Build order (rev 13): core -> Worker -> (CLI + app, interleaved).** Core first (convention,
+    schema, write-client interface, FTS); the Worker next as the MCP tool surface + HTTP – the
+    live-dogfood harness (ADR-0013) and the path v1 mobile writes ride. **The app is no longer last:**
+    the wedge *is* the connected mobile read/write bridge (ADR-0010/0025) and the dogfood loop isn't
+    complete without it, so CLI and app are built together over the same edge, not in series.
 - **Consequences.** Bun unifies runtime + bundler + test + single-binary, shrinking the toolchain.
   RN/Expo inside the monorepo is the first scaffolding risk to watch (Metro config, workspace
-  hoisting). The app is in-tree but not on the critical path until after the dogfood loop works.
+  hoisting). The app is now **on the critical path** (it is the wedge) but rides an edge it doesn't
+  have to build – Worker-before-app still holds.
+
+### ADR-0025. Product wedge & competitive positioning
+
+**Status:** Accepted (rev 13) - **Slug:** `wedge-and-positioning` - **Tags:** positioning, north-star, scope
+
+- **Context.** The category crystallized in 2026 (Karpathy's "LLM wiki" → GBrain at ~22k stars, Basic
+  Memory, nanobrain). Croft must state where it is differentiated and where it would be entering a
+  crowded lane.
+- **Decision – the wedge.** Croft is the **connected mobile read/write notes client** that bridges
+  on-the-go capture/reading with a desktop-centric, git-native, agent-enriched workflow. Mobile is
+  the differentiated front door; the desktop (Obsidian / Claude / CLI / grep) is the reused workshop;
+  plain Markdown in the user's git repo is the wire.
+- **Files are the truth (non-negotiable).** The Markdown files are the system of record; every
+  index/DB is derivable and disposable (tightens ADR-0001/0009). This is the deliberate inverse of
+  GBrain (Postgres = truth, Markdown = projection) and of vendor memory (opaque, in-custody). Do not
+  build on / couple to GBrain; stay loosely **convention-compatible** (read its files; don't depend
+  on its DB-only graph — Croft doesn't need it, related is computed, ADR-0006).
+- **Differentiation, stated.** Hosted-edge MCP (no install) + pure-git ownership + a mobile
+  read/write bridge — the combination GBrain/Basic Memory/nanobrain leave empty (all desktop/CLI
+  engines with no mobile read client). **Restraint is positioning** (no vector sprawl, no
+  arbitrary-edit surface), against a market sprinting toward edit-/vector-heavy agent memory.
+- **Complement, not competitor.** **Obsidian** (mid-2026: no AI/agent on its public roadmap; AI is
+  community plugins; it trademark-enforced the `mcp-obsidian` rename) is a *reader of the substrate
+  Croft writes* — be a feeder, not a rival. **Claude / vendor memory** is vendor-custody, opaque,
+  per-vendor — its existence *strengthens* the "your repo, every tool, forever" pitch; position
+  Claude as a client that writes into your repo.
+- **Watch-list (monitor, don't build).** (1) Obsidian Web Clipper's "Interpreter" creeping toward
+  native enrichment; (2) a model vendor shipping an MCP-native, repo/file-backed memory product with
+  the ownership framing — the plausible future encroachment (Anthropic's file-based Memory Tool and
+  Claude Code's owned-file memory show the category converging on "memory as owned files").
+- **Consequences.** The moat is the *combination* + the ethos, not "files as memory" alone (Claude
+  Code already does that locally). Targeting people already fully inside Obsidian is the weak spot.
+
+### ADR-0026. Operation vocabulary & bounded mutation
+
+**Status:** Accepted (rev 13) - **Slug:** `operation-vocabulary` - **Tags:** write-path, scope, data-model
+
+- **Context.** "Creates only" (ADR-0004/0015/0020) fit a reader wedge; the read/write-bridge wedge
+  (ADR-0010/0025) and dogfooding need a bounded way to add to and clean up content — without opening
+  arbitrary collaborative editing.
+- **Decision – v1 operation vocabulary.**
+  - **capture** — new note (create). Default; conflict-free.
+  - **append** — add a dated block to a note's append-only timeline (ADR-0005 body convention).
+    Additive; near-conflict-free.
+  - **correct** (edit-recent) — targeted SHA-conditional update of a recent note (fixing a fumble).
+  - **undo / delete** — remove an erroneous capture as a git delete-commit (note + its source in one
+    commit) with an `Undo-Of`/`Delete-Of` trailer (ADR-0007). `undo` = delete-by-`capture_id` within
+    a recency window.
+- **Why it's safe (and stays cheap).** Recency-scoping keeps it single-writer / just-happened, so
+  the conflict surface is ~zero. All correction ops are **edge-mediated SHA-conditional** in v1
+  (412 → refetch → reapply), sidestepping device-git divergence (ADR-0010). **Delete/undo don't
+  violate observability — they *are* new commits**; history preserves everything (ADR-0007). The
+  bright line: edit `HEAD`, never rewrite history.
+- **Out of scope.** Arbitrary/historical editing; in-place rewrite of "compiled truth" (the gated
+  edit path, ADR-0005); collaborative/real-time editing (no CRDT — single-writer, create-mostly).
+- **Consequences.** A complete, on-ethos dogfood loop (capture → append → correct/undo/delete) with
+  no new conflict machinery. The conformance envelope (ADR-0011) is unchanged — deletes/edits don't
+  touch it.
+
+### ADR-0027. Graceful obsolescence, longevity & revenue posture
+
+**Status:** Accepted (rev 13) - **Slug:** `longevity-and-revenue` - **Tags:** north-star, custody, distribution, cost
+
+- **Context.** A tool that asks you to entrust your knowledge must answer: what happens when the
+  operator — or the maker — loses interest?
+- **Decision – graceful obsolescence (non-negotiable).** **The operator's *and the maker's*
+  disappearance must be a non-event for the user's data.** Every feature must preserve the property
+  that the user loses nothing structural if the operator vanishes. The guarantee is **structural,
+  not promissory:**
+  - Data is already theirs — plain Markdown + git history in their own repo; readable in
+    Obsidian/grep/any editor with zero loss on operator death (ADR-0001/0003).
+  - The operator is a **processor, not a store** — losing the service costs *convenience*, not the
+    corpus; capture falls back to CLI / Claude-direct / hand-editing.
+  - Every boundary is a standard (ADR-0022) — the corpus plugs into the whole ecosystem even with
+    Croft gone.
+  - **The lever: open-source the core + Worker and ship the C0 self-host template** (ADR-0017) — so
+    the tool can be run, forked, and outlive the maker. Permissive license + npm provenance (ADR-0023).
+- **Decision – revenue posture.** **Inference is client-side (ADR-0002 Tier 1) and storage is the
+  user's GitHub**, so operator COGS ≈ the $5/mo Workers floor (ADR-0019). Therefore: **C0 self-host
+  is free forever** (the trust anchor + longevity mechanism); **C1 managed custody is the paid tier**
+  — a small flat subscription for convenience (OAuth + one-click App install, hosted MCP, later edge
+  search), margin-positive even when cheap. **Sell convenience, never access to your own data; never
+  charge for inference** (pay-your-own-model keeps COGS ~zero). GitHub Sponsors is a legitimate
+  fourth leg for an OSS developer tool.
+- **Consequences.** Revenue *need* is low by design, so generosity (free self-host) doesn't bleed. A
+  beloved niche end-state is an honest, stable outcome, not a failure — the longevity design makes
+  that safe. Accepts an audience-of-few risk consciously.
+
+### ADR-0028. Dependency & risk register
+
+**Status:** Accepted (rev 13) - **Slug:** `dependency-and-risk-register` - **Tags:** risk, architecture, tracking
+
+- **Context.** Make the dependency posture explicit so a fresh session inherits it: where Croft leans
+  hard, where it sits on a clean swappable seam, and where a provider's change of shape/stance/support
+  is a genuine, un-work-around-able risk.
+- **The map.**
+  - **Lean hard, clean exit:** **GitHub as data store** (plain MD in your repo → move to
+    GitLab/Gitea/self-host anytime; the ethos *is* the exit). **Cloudflare Workers** (core is
+    web-standard → portable to Deno/Bun/Node edge; KV swappable; `createMcpHandler` has a
+    vendor-neutral transport fallback). **Expo/RN** (the app shell is RN-specific, but the shared
+    core survives a shell rewrite).
+  - **Clean integration points (swappable):** **MCP** (one-handler-set / two-transports → MCP is an
+    adapter, not the spine; HTTP carries the same core). **Claude / enrichment model** (model-agnostic;
+    data is model-independent). **SQLite / op-sqlite / bun:sqlite** (FTS5 is standard; portable SQL
+    behind a driver interface). **Obsidian** (file-convention compatibility, not an API dependency —
+    files stay readable if it vanishes). **Bun** (dev toolchain only; prod is workerd).
+  - **External knob you can't remove (but it only ever slows you):** **GitHub API rate limits**
+    (ADR-0019) — mitigate by being frugal (batch / backoff).
+- **The two genuine risks.**
+  1. **isomorphic-git on mobile at scale (post-MVP).** No maintained native-git RN module exists, and
+     isomorphic-git has documented packfile-bloat (#2017) in exactly the fetch → merge → re-push loop.
+     If its perf doesn't hold, the only escape is a multi-week **native-binding build** (gitoxide /
+     libgit2 via uniffi / Nitro), not a swap. *Mitigation (in place):* deferred to post-MVP (v1 rides
+     the edge), benchmark-gated (ADR-0018 #3), edge path is a permanent fallback.
+  2. **Cloudflare lock-in via discipline erosion** (self-inflicted). Cloudflare changing terms is only
+     un-work-around-able if Cloudflare-specific APIs (Durable Objects, proprietary bindings) have
+     leaked into the core. *Mitigation:* keep the core web-standard; Cloudflare specifics live in a
+     thin adapter (use `createMcpHandler`, not `McpAgent` / DOs, ADR-0022).
+- **Guardrails promoted to non-negotiable.** (a) **Core stays web-standard; vendor/runtime specifics
+  live in adapters.** (b) **The isomorphic-git mobile benchmark is a gating spike before any
+  device-git-sync work.**
+- **Consequences.** The ownership ethos keeps the genuine-risk bucket nearly empty by design; the two
+  exceptions are deferred and pre-mitigated. Watch-list items (Obsidian Interpreter, vendor
+  repo-backed memory) live in ADR-0025.
