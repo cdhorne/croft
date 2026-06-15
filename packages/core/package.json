@@ -9,7 +9,10 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./errors": "./src/errors/index.ts",
-    "./convention": "./src/convention/index.ts"
+    "./convention": "./src/convention/index.ts",
+    "./write-client": "./src/write-client/index.ts",
+    "./write-client/backends/github-rest": "./src/write-client/backends/github-rest.ts",
+    "./write-client/backends/isomorphic-git": "./src/write-client/backends/isomorphic-git.ts"
   },
   "dependencies": {
     "ulid": "^3.0.1",
