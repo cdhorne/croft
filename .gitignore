@@ -58,7 +58,9 @@ pnpm-debug.log*
 # Editor / OS
 .DS_Store
 Thumbs.db
-.vscode/
+.vscode/*
+!.vscode/settings.json.example
+!.vscode/extensions.json.example
 .idea/
 *.swp
 *.swo

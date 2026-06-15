@@ -1,8 +1,10 @@
+import type { ExecutionContext } from '@cloudflare/workers-types';
+
 // @zonot/worker — Cloudflare Worker entry point.
 // Phase 1 surface (per ROADMAP):
 //   - createMcpHandler over the shared core handlers (ADR-0022)
-//   - GitHub REST write backend (ADR-0022 / phase-0-spec.md §3)
-//   - RFC 9457 error discipline + croft-trace-id (renamed: zonot-trace-id; ADR-0035)
+//   - GitHub REST write backend (ADR-0022 / docs/specs/core-spec.md §3)
+//   - RFC 9457 error discipline + zonot-trace-id (ADR-0035)
 //   - Workspace dispatch + per-tenant rate limiter (ADR-0035 §3)
 //   - Sentry from v1.0 (ADR-0035 §2.3)
 

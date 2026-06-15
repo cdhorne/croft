@@ -1,0 +1,30 @@
+# Lefthook — pre-commit gates. Mirrors Fathom's discipline.
+# Install: pnpm prepare  (runs `lefthook install`)
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome
+      run: pnpm biome check --write {staged_files}
+      glob: "*.{ts,tsx,js,jsx,json,jsonc,md,astro}"
+      stage_fixed: true
+
+    - name: typecheck-core
+      run: pnpm --filter @zonot/core typecheck
+      glob: "packages/core/**/*.ts"
+      run_in_parallel: true
+
+    - name: typecheck-worker
+      run: pnpm --filter @zonot/worker typecheck
+      glob: "apps/worker/**/*.ts"
+      run_in_parallel: true
+
+    - name: typecheck-cli
+      run: pnpm --filter zonot typecheck
+      glob: "apps/cli/**/*.ts"
+      run_in_parallel: true
+
+pre-push:
+  jobs:
+    - name: full-ci
+      run: pnpm ci

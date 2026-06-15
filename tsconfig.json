@@ -7,6 +7,8 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./apps/worker" },
-    { "path": "./apps/cli" }
+    { "path": "./apps/cli" },
+    { "path": "./apps/mobile" },
+    { "path": "./apps/web" }
   ]
 }

@@ -1,6 +1,6 @@
 name = "zonot-worker"
 main = "src/index.ts"
-compatibility_date = "2026-06-15"
+compatibility_date = "2026-06-01"
 compatibility_flags = ["nodejs_compat"]
 
 # Cloudflare configuration lands as the Worker takes shape (Phase 1).
