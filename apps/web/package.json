@@ -1,0 +1,14 @@
+{
+  "name": "@zonot/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zonot web — Astro static on Cloudflare Pages (marketing, docs, trust front).",
+  "license": "FSL-1.1-ALv2",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  }
+}

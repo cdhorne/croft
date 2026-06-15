@@ -1,0 +1,19 @@
+{
+  "name": "@zonot/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Zonot mobile — the connected read/write bridge (Expo RN + CNG).",
+  "license": "FSL-1.1-ALv2",
+  "main": "expo-router/entry",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "prebuild": "expo prebuild"
+  },
+  "dependencies": {
+    "@zonot/core": "workspace:*"
+  }
+}

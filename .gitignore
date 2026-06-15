@@ -21,6 +21,10 @@ out/
 *.orig.*
 web-build/
 
+# Astro
+.astro/
+.vercel/
+
 # iOS (Expo CNG regenerates; do not commit prebuild output)
 ios/Pods/
 ios/build/

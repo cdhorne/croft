@@ -1,0 +1,16 @@
+{
+  "name": "@zonot/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zonot — isomorphic convention core: schema, frontmatter, slug/id, tag normalization, write client interface, FTS engine.",
+  "license": "FSL-1.1-ALv2",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun"
+  }
+}

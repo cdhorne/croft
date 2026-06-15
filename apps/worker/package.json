@@ -1,0 +1,17 @@
+{
+  "name": "@zonot/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zonot Worker — MCP + HTTP tool surface on Cloudflare Workers.",
+  "license": "FSL-1.1-ALv2",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@zonot/core": "workspace:*"
+  }
+}
