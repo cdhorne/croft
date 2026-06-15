@@ -1,0 +1,15 @@
+# CODEOWNERS — automatic review assignment.
+# https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Default until contributors arrive: maker reviews everything.
+
+*                       @cdhorne
+
+# When contributors arrive, scope entries below:
+# /docs/adr/            @cdhorne
+# /docs/specs/          @cdhorne
+# /packages/core/       @cdhorne
+# /apps/worker/         @cdhorne
+# /apps/cli/            @cdhorne
+# /apps/mobile/         @cdhorne
+# /apps/web/            @cdhorne
