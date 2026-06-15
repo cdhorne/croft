@@ -40,6 +40,7 @@ The full decision record. Each file is one ADR (per ADR-0014's one-idea-per-file
 | [0035](0035-worker-runtime-discipline.md) | Worker runtime — error discipline, observability, multi-tenant scaffolding | Accepted (rev 1) | worker, observability, error-handling, multi-tenant |
 | [0036](0036-cli-surface.md) | CLI surface specification | Accepted (rev 1) | cli, ux, scope |
 | [0037](0037-threat-model.md) | Threat model and operator data access | Accepted (rev 1) | trust, security, custody, scope |
+| [0038](0038-web-presence.md) | Web presence — marketing, docs, and trust front | Accepted (rev 1) | web, marketing, docs, distribution, trust, scope |
 
 ADR-0032 (Licensing & openness) was merged into [ADR-0027 §Mechanism](0027-longevity-and-revenue.md#mechanism-source-available-non-compete-licensing) at seed dissolution (2026-06-14). References to ADR-0032 should now point at ADR-0027.
 
@@ -48,4 +49,4 @@ ADR-0032 (Licensing & openness) was merged into [ADR-0027 §Mechanism](0027-long
 - [`CHANGELOG.md`](CHANGELOG.md) — evolution of decisions across seed revisions.
 - [`../philosophy.md`](../philosophy.md) — non-negotiables, ethos, canonical vocabulary.
 - [`../architecture.md`](../architecture.md) — system shape in one breath, toolchain.
-- [`../specs/`](../specs/) — hand-authored implementation contracts (core, worker, cli, mobile).
+- [`../specs/`](../specs/) — hand-authored implementation contracts (core, worker, cli, mobile, web).

@@ -46,5 +46,5 @@ When a doc says "Phase 1" it means *the Worker build step*. When it says "v1.1" 
 ## See also
 
 - [`philosophy.md`](philosophy.md) — non-negotiables, ethos, canonical vocabulary, out-of-scope.
-- [`adr/`](adr/) — the 35 ADRs, one per file.
-- [`specs/`](specs/) — hand-authored implementation contracts (`core-spec.md`, `worker-spec.md`, `cli-spec.md`, `mobile-spec.md`).
+- [`adr/`](adr/) — the 37 ADRs, one per file.
+- [`specs/`](specs/) — hand-authored implementation contracts (`core-spec.md`, `worker-spec.md`, `cli-spec.md`, `mobile-spec.md`, `web-spec.md`).

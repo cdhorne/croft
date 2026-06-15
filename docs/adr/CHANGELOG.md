@@ -6,6 +6,35 @@ original revision summary; affected ADRs are linked. The seed document was disso
 
 ---
 
+## Web presence — marketing, docs, and trust front — 2026-06-15
+
+**Added [ADR-0038](0038-web-presence.md) (web presence: marketing, docs, and trust front).** Closes
+the last unspec'd shipped surface — the public web at `zonot.app`. The site was an implicit
+dependency in three places already: the Worker emits RFC 9457 `type` URIs as
+`https://zonot.app/problems/<name>` ([ADR-0035](0035-worker-runtime-discipline.md)) that must
+resolve; the GitHub App install ([ADR-0017](0017-custody-tiers-auth-distribution.md)) needs a public
+privacy URL; and managed C1 ([ADR-0033](0033-billing-and-entitlement.md)) needs a storefront.
+Decisions: **(1)** **Three braided jobs, one site** — marketing/landing, product + `/problems/`
+docs, and trust/legal/pricing. **(2)** **Astro static on Cloudflare Pages**, following the Fathom
+(`getfathom.ca`) precedent; lives as `apps/web` but is **explicitly not a core runtime** — no
+`packages/core` import, no isomorphic-git, excluded from the conformance test, so "one core, three
+runtimes" ([ADR-0011](0011-components-and-core.md)/[ADR-0024](0024-project-scaffold.md)) is
+unchanged. The Pages dependency is soft/content-free, not a deepening of the
+[ADR-0028](0028-dependency-and-risk-register.md) Cloudflare gravity well. **(3)** **Domain split:**
+`zonot.app` apex/`www` → the site (which **owns `/problems/<name>`**); `api.zonot.app` → the Worker.
+**(4)** **Trust copy is governed, not improvised** — claims on `/trust`/`/privacy`/`/license` must
+match [ADR-0037](0037-threat-model.md) verbatim (no-train contractually verified, retention bounded
+by the upstream DPA — the retired "no-retention" overclaim stays retired). **(5)** **Content-free,
+cookieless analytics** (e.g. Cloudflare Web Analytics) — same behavioral line as the operator stack;
+no GA/PostHog/Mixpanel. **(6)** **Scope tiered to the release train** ([ADR-0020](0020-mvp-scope.md)):
+v1.0 = landing + `/problems/` + self-host docs + honest privacy page; v1.1 = pricing + full legal
+(the GitHub App's public URL) + managed-C1 entry; v1.2 = hosted-inference explainer. ADR count
+**36 → 37.** Full route map, the `/problems/<name>` contract, and content/perf/analytics budgets in
+[`docs/specs/web-spec.md`](../specs/web-spec.md) (hand-authored companion to
+[ADR-0038](0038-web-presence.md)).
+
+---
+
 ## Threat model + Workers AI contractual ceiling — 2026-06-14
 
 **Added [ADR-0037](0037-threat-model.md) (threat model and operator data access).** Closes the

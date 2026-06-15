@@ -9,7 +9,7 @@ encryption.
 
 ## Source of truth
 
-The full decision record lives in **[`docs/adr/`](docs/adr/)** — 36 ADRs (one file each, per
+The full decision record lives in **[`docs/adr/`](docs/adr/)** — 37 ADRs (one file each, per
 ADR-0014). This file carries only what must be held in working memory every session. **When this
 file and an ADR disagree, the ADR wins** (and fix this file). The `docs/adr/` tree,
 `docs/philosophy.md`, and `docs/architecture.md` are hand-authored. The dissolution of the seed
