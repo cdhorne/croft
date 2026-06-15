@@ -6,7 +6,12 @@
   "description": "Zonot — isomorphic convention core: schema, frontmatter, slug/id, tag normalization, write client interface, FTS engine.",
   "license": "FSL-1.1-ALv2",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./errors": "./src/errors/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

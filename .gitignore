@@ -6,6 +6,7 @@ node_modules/
 dist/
 build/
 out/
+.tsbuild/
 *.tsbuildinfo
 
 # Bun (lockfile policy: pnpm-lock.yaml is committed; bun.lockb is not used)
