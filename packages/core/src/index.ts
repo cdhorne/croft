@@ -7,5 +7,6 @@
 //   import type { CaptureInput } from '@zonot/core/schema';
 //   import { SHAConflictError } from '@zonot/core/errors';
 
+export * from './convention/index.ts';
 export * from './errors/index.ts';
 export * from './schema/index.ts';
