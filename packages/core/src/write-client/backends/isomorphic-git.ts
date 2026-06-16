@@ -1,11 +1,6 @@
-// IsomorphicGitBackend — clone-holder write backend.
-// Phase 0 skeleton; full implementation lands in Phase 2 (CLI) and Phase 3
-// (mobile) over the same interface (docs/specs/cli-spec.md §4,
-// docs/specs/mobile-spec.md §3.2).
-//
-// Imported only by the CLI (clone-holder mode) and the mobile app. Workers
-// skip this subpath entirely — isomorphic-git's ~500 KB never enters the
-// Worker bundle.
+// IsomorphicGitBackend — clone-holder write backend (CLI + mobile).
+// Workers skip this subpath; isomorphic-git's ~500 KB stays out of their bundle.
+// TODO(phase2/3): implement against isomorphic-git.
 
 import type {
   AppendInput,
@@ -35,9 +30,7 @@ export interface IsomorphicGitBackendConfig {
 }
 
 const notImplemented = (op: string): Error =>
-  new Error(
-    `IsomorphicGitBackend.${op}: Phase 0 skeleton — Phase 2 (CLI) / Phase 3 (mobile) land it`,
-  );
+  new Error(`IsomorphicGitBackend.${op}: not yet implemented`);
 
 export class IsomorphicGitBackend implements WriteClient {
   readonly #config: IsomorphicGitBackendConfig;

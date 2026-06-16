@@ -4,39 +4,26 @@ import { IsomorphicGitBackend } from '../backends/isomorphic-git.ts';
 import type { WriteClient } from '../interface.ts';
 
 describe('WriteClient — Phase 0 skeleton', () => {
-  test('GitHubRestBackend constructs and conforms to WriteClient', () => {
+  // (Structural conformance to the WriteClient interface is enforced by the
+  // type annotations on backend variables below; no runtime `typeof` checks
+  // needed — TS already proved them.)
+
+  test('GitHubRest skeleton ops reject as not-implemented', async () => {
     const backend: WriteClient = new GitHubRestBackend({
       owner: 'cdhorne',
       repo: 'zonot-notes',
       token: 'ghp_test',
     });
-    expect(backend).toBeDefined();
-    expect(typeof backend.capture).toBe('function');
-    expect(typeof backend.head).toBe('function');
-  });
-
-  test('IsomorphicGitBackend constructs and conforms to WriteClient', () => {
-    const backend: WriteClient = new IsomorphicGitBackend({ dir: '/tmp/zonot' });
-    expect(backend).toBeDefined();
-    expect(typeof backend.append).toBe('function');
-  });
-
-  test('GitHubRest skeleton ops reject with "Phase 0 skeleton"', async () => {
-    const backend = new GitHubRestBackend({
-      owner: 'cdhorne',
-      repo: 'zonot-notes',
-      token: 'ghp_test',
-    });
     await expect(backend.init({ workspace: 'personal', conventionVersion: 1 })).rejects.toThrow(
-      'Phase 0 skeleton',
+      'not yet implemented',
     );
   });
 
-  test('IsomorphicGit skeleton ops reject with "Phase 0 skeleton"', async () => {
-    const backend = new IsomorphicGitBackend({ dir: '/tmp/zonot' });
+  test('IsomorphicGit skeleton ops reject as not-implemented', async () => {
+    const backend: WriteClient = new IsomorphicGitBackend({ dir: '/tmp/zonot' });
     await expect(
       backend.head({ workspace: 'personal', id: '01HZZZA1B2C3D4E5F6G7H8J9K0' }),
-    ).rejects.toThrow('Phase 0 skeleton');
+    ).rejects.toThrow('not yet implemented');
   });
 
   test('config is readable for introspection', () => {

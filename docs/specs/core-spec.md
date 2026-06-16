@@ -48,7 +48,7 @@ UNKNOWN  passed through, in input-order, after COULD
 
 - **Datetimes** (`created`, `updated`): ISO-8601 UTC, `…Z` suffix, **unquoted**.
 - **ULIDs** (`id`, `source`, `of`): 26-char Crockford base32, **unquoted**.
-- **Strings**: single-quoted only when the value contains a YAML special character (`: # & * ! | > ' " % @ \``), starts with `[` or `{`, parses as a number/bool/null, or contains a leading/trailing whitespace.
+- **Strings**: single-quoted only when the value would otherwise parse as something other than a plain scalar — contains `: ` (mapping indicator) or ` #` (comment break), starts with `#` (full-line comment), ends with `:` (key indicator), starts with one of `! & * | > % @ \` ? , [ {`, parses as a number/bool/null, or contains leading/trailing whitespace. Bare `C#`, `foo:bar`, `email@example.com` stay unquoted (YAML 1.2 plain-scalar rules).
 - **Lists** (`tags`, `aliases`): YAML **block sequence** (one item per line, `-` prefix), never inline `[…]`.
 - **Strings inside lists** follow the same quoting rules as scalar strings.
 - **Booleans/numbers**: literal `true`/`false`/integer/float; never quoted.

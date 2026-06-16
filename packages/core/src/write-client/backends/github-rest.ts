@@ -1,10 +1,6 @@
 // GitHubRestBackend — Worker-side write backend.
-// Phase 0 skeleton; full implementation lands in Phase 1 alongside the
-// MCP + HTTP handler set (docs/specs/worker-spec.md).
-//
-// Imported only by the Worker (and by tests). Apps that don't ride the
-// edge skip this subpath entirely so the isomorphic-git path's footprint
-// is irrelevant to their bundle.
+// Imported only by the Worker; other consumers skip this subpath entirely.
+// TODO(phase1): implement against the GitHub Contents / Git Data APIs.
 
 import type {
   AppendInput,
@@ -32,7 +28,7 @@ export interface GitHubRestBackendConfig {
 }
 
 const notImplemented = (op: string): Error =>
-  new Error(`GitHubRestBackend.${op}: Phase 0 skeleton — implementation lands in Phase 1`);
+  new Error(`GitHubRestBackend.${op}: not yet implemented`);
 
 export class GitHubRestBackend implements WriteClient {
   readonly #config: GitHubRestBackendConfig;

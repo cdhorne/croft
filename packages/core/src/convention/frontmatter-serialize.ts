@@ -123,19 +123,23 @@ function formatString(s: string): string {
   return s;
 }
 
+// YAML 1.2 plain-scalar rules: quote only what would change meaning.
+// `C#` and `email@example.com` style values stay unquoted; comment / mapping
+// indicators force quoting. Single-quoted scalars don't admit newlines, so
+// any control char in the value forces quoting; values with embedded newlines
+// are detected here but produce technically-malformed single-quoted YAML —
+// frontmatter values shouldn't contain newlines per the convention (the body
+// is below the `---`); enforced at parse time, not here.
 function needsQuoting(s: string): boolean {
   if (s === '') return true;
-  if (/^[\s]/.test(s) || /[\s]$/.test(s)) return true;
-  // YAML reserved leading characters or special tokens.
+  if (/^\s|\s$/.test(s)) return true;
   if (/^[!&*|>%@`?,[{]/.test(s)) return true;
-  // Strings that would parse as bool / null / number.
   if (/^(true|false|null|yes|no|on|off|~)$/i.test(s)) return true;
   if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(s)) return true;
-  // Characters that affect YAML key/value parsing.
-  if (s.includes(': ') || s.includes(' #') || s.includes('#') || s.includes(':')) {
-    return true;
-  }
-  // Quote anything containing newlines, tabs, or other control chars.
+  if (s.includes(': ')) return true; // would parse as a nested mapping
+  if (s.includes(' #')) return true; // would parse as a comment break
+  if (s.startsWith('#')) return true; // would parse as a full-line comment
+  if (s.endsWith(':')) return true; // would parse as a key
   for (let i = 0; i < s.length; i++) {
     const code = s.charCodeAt(i);
     if (code <= 0x1f || code === 0x7f) return true;

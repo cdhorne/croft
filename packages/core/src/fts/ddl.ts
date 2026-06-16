@@ -1,6 +1,5 @@
-// DDL for the per-workspace FTS5 schema (docs/specs/core-spec.md §2.1).
-// FTS5 schema version is tracked in zonot_meta('schema_version', '1').
-// On a forward migration, the version bumps and a per-version migrator runs.
+// Per-workspace FTS5 schema (v1). Schema version tracked in
+// zonot_meta('schema_version', ...) for forward migrations.
 
 export const FTS_SCHEMA_VERSION = 1 as const;
 

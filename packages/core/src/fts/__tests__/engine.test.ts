@@ -172,6 +172,37 @@ describe('SearchEngine.list', () => {
     expect(result.groups.map((g) => g.key).sort()).toEqual(['2026-05', '2026-06']);
   });
 
+  test('group_by week returns YYYY-Www keys spanning month boundaries', () => {
+    // Seed two notes adjacent to a week boundary to verify strftime('%Y-W%W').
+    writer.upsertNote({
+      id: ulid('DDD'),
+      path: 'notes/2025/12/last-week.md',
+      title: 'last week',
+      type: 'note',
+      workspace: WORKSPACE,
+      created: '2025-12-29T10:00:00Z',
+      v: 1,
+      tags: [],
+      body: '',
+    });
+    writer.upsertNote({
+      id: ulid('EEE'),
+      path: 'notes/2026/01/first-week.md',
+      title: 'first week',
+      type: 'note',
+      workspace: WORKSPACE,
+      created: '2026-01-05T10:00:00Z',
+      v: 1,
+      tags: [],
+      body: '',
+    });
+    const result = engine.list({ workspace: WORKSPACE, group_by: 'week' });
+    const keys = result.groups.map((g) => g.key);
+    // Both `2025-W52` and `2026-W01` should be distinct buckets.
+    expect(keys).toContain('2025-W52');
+    expect(keys).toContain('2026-W01');
+  });
+
   test('group_by includes a sample of recent notes per bucket', () => {
     const result = engine.list({ workspace: WORKSPACE, group_by: 'type' });
     const note = result.groups.find((g) => g.key === 'note');
