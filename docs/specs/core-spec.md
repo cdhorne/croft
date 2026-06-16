@@ -594,7 +594,7 @@ and the RN harness; both must pass.
 | Area               | Fixtures                                                                                   |
 |--------------------|--------------------------------------------------------------------------------------------|
 | Slug — empty title | falls back to id                                                                           |
-| Slug — unicode     | NFC normalization (combining vs. precomposed → same slug)                                  |
+| Slug — unicode     | NFD decomposition + diacritic stripping (combining vs. precomposed → same slug)            |
 | Slug — long title  | truncation at last `-` ≤ 60 chars; hard-cut when no `-`                                    |
 | Slug — reserved    | `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|` stripped                                       |
 | Slug — RTL         | Hebrew/Arabic input produces a deterministic slug (lowercase no-op; hyphenated)            |
@@ -604,7 +604,7 @@ and the RN harness; both must pass.
 | Tag norm           | `["Foo Bar","foo-bar"," FOO_BAR ","_x_y_"] → ["foo-bar","x-y"]`                            |
 | Body splitter      | no divider; divider at start; divider mid-body; multiple top-level dividers; in fenced code |
 | Layout             | `created: 2026-06-14T...Z` → `notes/2026/06/<id>-<slug>.md`                                |
-| NFC equivalence    | combining-diacritic input vs. precomposed → identical slug + identical frontmatter bytes   |
+| NFD equivalence    | combining-diacritic input vs. precomposed → identical slug + identical frontmatter bytes   |
 | Source node        | sources frontmatter has `type: context` first after id/v; `of` populated; omitted updated   |
 
 ### 4.4 Out of scope (do NOT gate in conformance)

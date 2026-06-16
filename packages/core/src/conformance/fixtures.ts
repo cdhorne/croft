@@ -1,6 +1,6 @@
 // Starter conformance fixtures. Covers the main rows of the §4.3 matrix:
 // slug edge cases, frontmatter key order, YAML quoting, tag normalization,
-// body splitter modes, layout derivation, NFC equivalence.
+// body splitter modes, layout derivation, diacritic folding (NFD).
 // Add fixtures here as bugs are found or behaviors get pinned.
 
 import type { ConformanceFixture } from './types.ts';
@@ -62,8 +62,8 @@ export const STARTER_FIXTURES: ReadonlyArray<ConformanceFixture> = [
     },
   },
   {
-    name: 'slug-strips-diacritics-nfc',
-    description: 'NFC normalization + diacritic stripping.',
+    name: 'slug-strips-diacritics',
+    description: 'NFD decomposition + diacritic stripping.',
     input: {
       output: { title: 'Café résumé', body: '' },
       _id: ID,

@@ -14,11 +14,11 @@ describe('slugify', () => {
     expect(slugify({ id: ID, title: 'Quick note about launch' })).toBe('quick-note-about-launch');
   });
 
-  test('strips diacritics (NFC normalization)', () => {
+  test('strips diacritics (NFD decomposition)', () => {
     expect(slugify({ id: ID, title: 'Café résumé' })).toBe('cafe-resume');
   });
 
-  test('NFC: precomposed and combining produce the same slug', () => {
+  test('precomposed and combining diacritics produce the same slug', () => {
     // 'é' as precomposed (U+00E9) vs. combining (U+0065 U+0301)
     const precomposed = 'caf\u00e9';
     const combining = 'cafe\u0301';

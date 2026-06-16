@@ -66,6 +66,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# Claude Code: shared config (settings.json, hooks) is committed; the
+# per-developer local override is not.
+.claude/settings.local.json
+
 # Working scratch (planning, throwaway)
 .dev/
 .cache/

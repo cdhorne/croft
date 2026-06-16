@@ -16,8 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests",
     "dev": "bun run ./src/index.ts",
-    "build": "bun build ./src/index.ts --compile --outfile ./dist/zonot",
-    "build:binary": "bun build ./src/index.ts --compile --outfile ./dist/zonot"
+    "build": "bun build ./src/index.ts --compile --outfile ./dist/zonot"
   },
   "dependencies": {
     "@zonot/core": "workspace:*"
