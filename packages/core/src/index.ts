@@ -9,6 +9,7 @@
 
 export * from './convention/index.ts';
 export * from './errors/index.ts';
+export * from './provenance/index.ts';
 export * from './schema/index.ts';
 // Backends NOT re-exported here — keep import-path discipline so the
 // Worker bundle never accidentally pulls in isomorphic-git, etc.
