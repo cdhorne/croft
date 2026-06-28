@@ -8,16 +8,9 @@ describe('WriteClient — Phase 0 skeleton', () => {
   // type annotations on backend variables below; no runtime `typeof` checks
   // needed — TS already proved them.)
 
-  test('GitHubRest skeleton ops reject as not-implemented', async () => {
-    const backend: WriteClient = new GitHubRestBackend({
-      owner: 'cdhorne',
-      repo: 'zonot-notes',
-      token: 'ghp_test',
-    });
-    await expect(backend.init({ workspace: 'personal', conventionVersion: 1 })).rejects.toThrow(
-      'not yet implemented',
-    );
-  });
+  // GitHubRestBackend is implemented in Phase 1(b)-iii; its behavior is covered
+  // by github-rest.test.ts. Here we only assert it still satisfies the interface
+  // (the `: WriteClient` annotation below) and exposes config introspection.
 
   test('IsomorphicGit skeleton ops reject as not-implemented', async () => {
     const backend: WriteClient = new IsomorphicGitBackend({ dir: '/tmp/zonot' });
