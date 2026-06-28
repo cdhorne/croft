@@ -39,7 +39,7 @@ describe('GitHubRestBackend', () => {
     const before = gh.headCommit;
     const again = await backend.init({ workspace: 'personal', conventionVersion: 1 });
     expect(gh.headCommit).toBe(before); // no new commit
-    expect(again.paths).toEqual(['zonot.json']);
+    expect(again.paths).toEqual(['zonot.json', 'notes/.gitkeep', 'sources/.gitkeep']);
   });
 
   test('capture writes a note, normalizes tags, and reads back', async () => {
@@ -59,7 +59,7 @@ describe('GitHubRestBackend', () => {
     expect(note.frontmatter.title).toBe('Kickoff');
     expect(note.frontmatter.tags).toEqual(['foo-bar']);
     expect(note.body_compiled).toBe('first thought\n');
-    expect(note.sha).toBe(res.commit_sha === note.sha ? note.sha : note.sha); // sha present
+    expect(note.sha).toMatch(/^[0-9a-f]{40}$/); // a real git blob sha
     expect(parseCommitTrailers(gh.headMessage())).toMatchObject({
       Source: 'mcp:claude',
       'Capture-Id': res.id,
@@ -174,6 +174,34 @@ describe('GitHubRestBackend', () => {
     expect(note.frontmatter.title).toBe('Fixed');
     expect(note.frontmatter.tags).toEqual(['b']);
     expect(parseCommitTrailers(gh.headMessage())['Edit-Of']).toBe(cap.id);
+  });
+
+  test('correct preserves aliases, unknown keys, and a type the output omits', async () => {
+    const backend = makeBackend(gh);
+    const id = '01HZZZA1B2C3D4E5F6G7H8J9K0';
+    // Seed a note (as if hand-edited in Obsidian) with aliases + an unknown key.
+    gh.injectCommit({
+      [`notes/2026/06/${id}-seed.md`]:
+        `---\nid: ${id}\nv: 1\ncreated: 2026-06-14T12:00:00Z\ntags:\n  - keep\n` +
+        `type: project\naliases:\n  - old-name\ncssclass: wide\n---\noriginal\n\n---\n\n- kept entry\n`,
+    });
+    const sha = (await backend.head({ workspace: 'personal', id }))!.sha;
+
+    await backend.correct({
+      workspace: 'personal',
+      id,
+      output: { title: 'New', tags: ['fresh'], body: 'new compiled' }, // note: no `type`
+      base_sha: sha,
+    });
+
+    const note = await backend.readNote({ workspace: 'personal', id });
+    expect(note.frontmatter.type).toBe('project'); // not dropped
+    expect(note.frontmatter.aliases).toEqual(['old-name']); // not dropped
+    expect(note.frontmatter.cssclass).toBe('wide'); // tolerant pass-through kept
+    expect(note.frontmatter.title).toBe('New');
+    expect(note.frontmatter.tags).toEqual(['fresh']);
+    expect(note.body_compiled.trim()).toBe('new compiled');
+    expect(note.body_timeline).toContain('kept entry');
   });
 
   test('delete removes the note + its source; readNote then 404s', async () => {

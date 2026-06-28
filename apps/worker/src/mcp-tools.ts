@@ -28,6 +28,7 @@ import {
   runReadNote,
   runUndo,
 } from './handlers.ts';
+import { toZonotProblem } from './problem.ts';
 
 const SOURCE = 'mcp:claude';
 
@@ -50,6 +51,19 @@ const omitWorkspace = { workspace: true } as const;
 
 /** Build the tool set bound to one authenticated workspace. */
 export function mcpTools(ctx: WorkspaceContext, env: Env): ToolDef[] {
+  // Errors go through the same RFC 9457 mapper the HTTP path uses, so 5xx detail
+  // is redacted and the trace_id reaches the agent (worker-spec §1.4).
+  const wrap = async (fn: () => Promise<unknown>): Promise<ToolResult> => {
+    try {
+      return { content: [{ type: 'text', text: JSON.stringify(await fn(), null, 2) }] };
+    } catch (err) {
+      return {
+        content: [{ type: 'text', text: JSON.stringify(toZonotProblem(err, ctx.trace_id)) }],
+        isError: true,
+      };
+    }
+  };
+
   return [
     {
       name: 'capture',
@@ -127,20 +141,4 @@ export function mcpTools(ctx: WorkspaceContext, env: Env): ToolDef[] {
       handler: () => wrap(() => runInit(ctx, env, SOURCE)),
     },
   ];
-}
-
-/** Run a handler and shape its result; map a throw to an MCP error result. */
-async function wrap(fn: () => Promise<unknown>): Promise<ToolResult> {
-  try {
-    const data = await fn();
-    return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-  } catch (err) {
-    const e = err as { name?: string; message?: string };
-    return {
-      content: [
-        { type: 'text', text: JSON.stringify({ error: e.name ?? 'Error', message: e.message }) },
-      ],
-      isError: true,
-    };
-  }
 }

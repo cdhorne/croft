@@ -1,22 +1,7 @@
-// Commit-message + provenance-trailer builder (docs/specs/core-spec.md §3.5 /
-// ADR-0007). The core builds the message; the backend writes it. Provenance
-// rides in commit trailers, NOT in note frontmatter — git history is the
-// immutability record (CLAUDE.md non-negotiable / ADR-0007).
-//
-// Format:
-//   <subject>
-//
-//   [<body paragraph>]
-//
-//   Source: <origin>
-//   Capture-Id: <ULID>
-//   [Edit-Of: <id>]            (correct)
-//   [Undo-Of: <capture_id>]    (undo)
-//   [Delete-Of: <id>]          (delete)
-//   [Model: <identifier>]      (only when enrichment touched the body)
-//
-// Trailers are RFC-5322 style (`Key: value`), one per line, in a single final
-// paragraph separated from the body by one blank line (git-trailer convention).
+// Commit-message + provenance-trailer builder (message format in core-spec §3.5 /
+// ADR-0007). The core builds the message; the backend writes it. Provenance rides
+// in commit trailers, NOT note frontmatter — git history is the immutability record.
+// Trailers are git-style (`Key: value`, one per line) in a single final paragraph.
 
 // Trailer keys, in the canonical emission order.
 const TRAILER_ORDER = ['Source', 'Capture-Id', 'Edit-Of', 'Undo-Of', 'Delete-Of', 'Model'] as const;

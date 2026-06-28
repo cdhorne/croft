@@ -14,6 +14,7 @@ import {
   type DeleteInput,
   deleteInputSchema,
   type InitInput,
+  type InitResult,
   initInputSchema,
   type ListRecentInput,
   type ListTagsInput,
@@ -156,7 +157,7 @@ export async function runInit(
   ctx: WorkspaceContext,
   env: Env,
   source: string,
-): Promise<WriteResult | unknown> {
+): Promise<InitResult> {
   const input: InitInput = validate(initInputSchema, {
     workspace: ctx.workspace,
     conventionVersion: 1,

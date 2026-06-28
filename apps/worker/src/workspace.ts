@@ -54,7 +54,8 @@ export async function dispatchWorkspace(
   };
 }
 
-/** Length-independent constant-time string compare. */
+/** Best-effort constant-time string compare (JS string ops aren't a hard timing
+ *  guarantee, but this avoids the obvious early-exit byte-by-byte leak). */
 export function constantTimeEquals(a: string, b: string): boolean {
   const len = Math.max(a.length, b.length);
   let diff = a.length ^ b.length;

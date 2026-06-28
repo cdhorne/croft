@@ -35,19 +35,21 @@ afterEach(() => {
 
 describe('mcpTools', () => {
   test('exposes the v1.0 tool surface, workspace never an argument', () => {
-    const names = mcpTools(ctx, env).map((t) => t.name);
-    expect(names).toEqual([
-      'capture',
-      'append',
-      'correct',
-      'undo',
-      'delete',
-      'read_note',
-      'list_recent',
-      'list_tags',
-      'init',
-    ]);
-    for (const t of mcpTools(ctx, env)) {
+    const tools = mcpTools(ctx, env);
+    expect(tools.map((t) => t.name).sort()).toEqual(
+      [
+        'append',
+        'capture',
+        'correct',
+        'delete',
+        'init',
+        'list_recent',
+        'list_tags',
+        'read_note',
+        'undo',
+      ].sort(),
+    );
+    for (const t of tools) {
       expect(Object.keys(t.shape)).not.toContain('workspace');
     }
   });
@@ -72,14 +74,21 @@ describe('mcpTools', () => {
       base_sha: 'deadbeef',
     });
     expect(res.isError).toBe(true);
-    const err = JSON.parse(res.content[0]?.text ?? '{}') as { error: string };
-    expect(err.error).toBe('NotFoundError');
+    // Errors are RFC 9457 problems (redacted, trace-carrying), not raw messages.
+    const p = JSON.parse(res.content[0]?.text ?? '{}') as {
+      status: number;
+      type: string;
+      trace_id: string;
+    };
+    expect(p.status).toBe(404);
+    expect(p.type).toContain('not-found');
+    expect(p.trace_id).toBe(ctx.trace_id);
   });
 
   test('validation failure also surfaces as isError (missing body)', async () => {
     const res = await call('capture', { output: { tags: ['x'] } });
     expect(res.isError).toBe(true);
-    const err = JSON.parse(res.content[0]?.text ?? '{}') as { error: string };
-    expect(err.error).toBe('ValidationError');
+    const p = JSON.parse(res.content[0]?.text ?? '{}') as { status: number };
+    expect(p.status).toBe(400);
   });
 });

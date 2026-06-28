@@ -11,7 +11,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import type { Env } from './env.ts';
+import type { Env, RequestContext } from './env.ts';
 import { mcpTools } from './mcp-tools.ts';
 import { dispatchWorkspace } from './workspace.ts';
 
@@ -26,7 +26,12 @@ export function buildServer(workspaceCtx: Parameters<typeof mcpTools>[0], env: E
   return server;
 }
 
-export async function handleMcp(request: Request, env: Env, trace_id: string): Promise<Response> {
+export async function handleMcp(
+  request: Request,
+  env: Env,
+  req: RequestContext,
+): Promise<Response> {
+  req.op = 'mcp';
   // /v1/{workspace}/{secret}/mcp — authenticate before any tool runs.
   const parts = new URL(request.url).pathname.split('/').filter(Boolean);
   const [, workspaceRaw, secret] = parts;
@@ -34,8 +39,9 @@ export async function handleMcp(request: Request, env: Env, trace_id: string): P
     decodeURIComponent(workspaceRaw ?? ''),
     secret ?? null,
     env,
-    trace_id,
+    req.trace_id,
   );
+  req.workspace_hash = ctx.workspace_hash;
 
   const server = buildServer(ctx, env);
   // No sessionIdGenerator → stateless mode (SDK: "if not provided, session

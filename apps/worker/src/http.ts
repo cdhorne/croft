@@ -14,7 +14,7 @@
 //   /v1/{workspace}/{secret}/notes/{id}/undo         POST
 
 import { NotFoundError, ValidationError } from '@zonot/core/errors';
-import type { Env } from './env.ts';
+import type { Env, RequestContext } from './env.ts';
 import {
   runAppend,
   runCapture,
@@ -30,29 +30,42 @@ import { dispatchWorkspace } from './workspace.ts';
 
 const SOURCE = 'http:zonot';
 
-export async function handleHttp(request: Request, env: Env, trace_id: string): Promise<Response> {
+export async function handleHttp(
+  request: Request,
+  env: Env,
+  req: RequestContext,
+): Promise<Response> {
   const url = new URL(request.url);
   const parts = url.pathname.split('/').filter(Boolean); // ['v1', workspace, secret, ...rest]
   if (parts[0] !== 'v1' || parts.length < 4) {
     throw new NotFoundError(`route ${request.method} ${url.pathname}`);
   }
   const [, workspaceRaw, secret, ...rest] = parts;
-  const workspace = decodeURIComponent(workspaceRaw ?? '');
-  const ctx = await dispatchWorkspace(workspace, secret ?? null, env, trace_id);
+  const ctx = await dispatchWorkspace(
+    decodeURIComponent(workspaceRaw ?? ''),
+    secret ?? null,
+    env,
+    req.trace_id,
+  );
+  req.workspace_hash = ctx.workspace_hash; // now known → reaches logs + metrics
   const idemKey = request.headers.get('idempotency-key') ?? undefined;
   const sub = rest.map((p) => decodeURIComponent(p)).join('/');
   const method = request.method;
+  const at = (op: string): true => {
+    req.op = op;
+    return true;
+  };
 
   // /capture, /init
-  if (sub === 'capture' && method === 'POST') {
+  if (sub === 'capture' && method === 'POST' && at('capture')) {
     return json(await runCapture(ctx, env, SOURCE, await body(request), idemKey), 201);
   }
-  if (sub === 'init' && method === 'POST') {
+  if (sub === 'init' && method === 'POST' && at('init')) {
     return json(await runInit(ctx, env, SOURCE), 201);
   }
 
   // /notes (list), /tags
-  if (sub === 'notes' && method === 'GET') {
+  if (sub === 'notes' && method === 'GET' && at('list')) {
     return json(
       await runListRecent(ctx, env, SOURCE, {
         ...(url.searchParams.get('since')
@@ -62,7 +75,7 @@ export async function handleHttp(request: Request, env: Env, trace_id: string): 
       }),
     );
   }
-  if (sub === 'tags' && method === 'GET') {
+  if (sub === 'tags' && method === 'GET' && at('tags')) {
     return json(
       await runListTags(ctx, env, SOURCE, {
         ...(url.searchParams.get('prefix')
@@ -77,20 +90,20 @@ export async function handleHttp(request: Request, env: Env, trace_id: string): 
     const id = decodeURIComponent(rest[1]);
     const action = rest[2];
 
-    if (!action && method === 'GET') {
+    if (!action && method === 'GET' && at('read')) {
       const includeSource = isTruthy(url.searchParams.get('include_source'));
       return json(await runReadNote(ctx, env, SOURCE, id, includeSource));
     }
-    if (!action && method === 'DELETE') {
+    if (!action && method === 'DELETE' && at('delete')) {
       return json(await runDelete(ctx, env, SOURCE, id, await body(request)));
     }
-    if (action === 'append' && method === 'POST') {
+    if (action === 'append' && method === 'POST' && at('append')) {
       return json(await runAppend(ctx, env, SOURCE, id, await body(request), idemKey));
     }
-    if (action === 'correct' && method === 'POST') {
+    if (action === 'correct' && method === 'POST' && at('correct')) {
       return json(await runCorrect(ctx, env, SOURCE, id, await body(request), idemKey));
     }
-    if (action === 'undo' && method === 'POST') {
+    if (action === 'undo' && method === 'POST' && at('undo')) {
       return json(await runUndo(ctx, env, SOURCE, id, await body(request)));
     }
   }

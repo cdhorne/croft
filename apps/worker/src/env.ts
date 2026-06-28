@@ -45,7 +45,10 @@ export interface WorkspaceContext {
   trace_id: string;
 }
 
-/** Per-request ambient passed through the router. */
+/** Per-request ambient passed through the router. workspace_hash/op are filled
+ *  in by the transports once known, so logs + metrics carry them even on error. */
 export interface RequestContext {
   trace_id: string;
+  workspace_hash: string | null;
+  op: string | null;
 }

@@ -44,8 +44,13 @@ export async function withIdempotency(
   body: unknown,
   write: () => Promise<WriteResult>,
 ): Promise<WriteResult> {
+  // Deviation from core-spec §3.4 ("the ULID id is the de-facto key"): the Worker
+  // mints the note id server-side, so there is no client id to dedupe on — absent
+  // a caller key (or a KV binding), writes pass through.
   if (!store || !idemKey) return write();
 
+  // `body` is the schema-validated input (Zod re-emits keys in declared order),
+  // so JSON.stringify is canonical enough to detect a same-key/different-body replay.
   const body_hash = await sha256Hex(JSON.stringify(body));
   const cacheKey = `idem:${workspace}:${idemKey}`;
 

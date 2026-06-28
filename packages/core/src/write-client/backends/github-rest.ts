@@ -23,6 +23,7 @@ import {
   deriveNotePath,
   deriveSourcePath,
   generateUlid,
+  normalizeTags,
   parseNoteFile,
   parseSourceFile,
   slugify,
@@ -123,20 +124,20 @@ export class GitHubRestBackend implements WriteClient {
   // --- init ----------------------------------------------------------------
 
   async init(_input: InitInput): Promise<InitResult> {
+    const scaffold: CommitFile[] = [
+      { path: ZONOT_MARKER, content: `${JSON.stringify({ convention_version: 1 })}\n` },
+      { path: 'notes/.gitkeep', content: '' },
+      { path: 'sources/.gitkeep', content: '' },
+    ];
+
     const head = await this.#getHead();
     const existing = head ? await this.#getTreeEntries(head.treeSha) : [];
     const present = new Set(existing.map((e) => e.path));
-
-    const files: CommitFile[] = [];
-    if (!present.has(ZONOT_MARKER)) {
-      files.push({ path: ZONOT_MARKER, content: `${JSON.stringify({ convention_version: 1 })}\n` });
-    }
-    if (!present.has('notes/.gitkeep')) files.push({ path: 'notes/.gitkeep', content: '' });
-    if (!present.has('sources/.gitkeep')) files.push({ path: 'sources/.gitkeep', content: '' });
+    const files = scaffold.filter((f) => !present.has(f.path));
 
     if (files.length === 0) {
-      // Already initialized — idempotent no-op; report current head.
-      return { commit_sha: head?.commitSha ?? '', paths: [ZONOT_MARKER] };
+      // Already initialized — idempotent no-op; report the scaffold already present.
+      return { commit_sha: head?.commitSha ?? '', paths: scaffold.map((f) => f.path) };
     }
 
     const message = buildCommitMessage({
@@ -150,11 +151,8 @@ export class GitHubRestBackend implements WriteClient {
   // --- capture -------------------------------------------------------------
 
   async capture(input: CaptureInput): Promise<WriteResult> {
-    // capture_id := note id. A note's identity IS its creating capture, so undo
-    // (which resolves by capture_id) and delete (which resolves by id) share
-    // one by-id resolution path and differ only by intent trailer (ADR-0026
-    // "the split is intent-signalling"). Every later mutation event gets its own
-    // fresh Capture-Id, so git history keeps unique per-event ids throughout.
+    // capture_id := note id, so undo (by capture_id) and delete (by id) resolve
+    // identically and differ only by intent trailer (ADR-0026).
     const id = this.#newId();
     const created = this.#now();
     const slug = slugify(
@@ -241,23 +239,19 @@ export class GitHubRestBackend implements WriteClient {
 
   async correct(input: CorrectInput): Promise<WriteResult> {
     return this.#conditionalEdit(input.id, input.base_sha, (parsed) => {
-      // output.body becomes the new compiled body; the existing timeline is
-      // preserved (core-spec §3.2). Any divider inside output.body is honored.
+      // output.body replaces the compiled body; the timeline is preserved
+      // (core-spec §3.2). A divider inside output.body is a cut point — anything
+      // below it is dropped, not merged into the timeline.
       const newCompiled = splitBody(input.output.body).compiled.replace(/\n+$/, '');
       const timeline = parsed.body_timeline.replace(/^\n+/, '').replace(/\n+$/, '');
       const body = timeline ? `${newCompiled}\n\n---\n\n${timeline}\n` : `${newCompiled}\n`;
 
-      // Rebuild facets from the corrected output; preserve identity + timeline-bearing fields.
-      const prev = parsed.frontmatter;
-      const fm = buildNoteFrontmatter({
-        id: prev.id,
-        created: prev.created,
-        workspace: prev.workspace,
-        thread: prev.thread,
-        output: input.output,
-        sourceId: prev.source,
-      });
-      fm.updated = this.#now();
+      // Spread the existing frontmatter so aliases + tolerant pass-through keys
+      // survive (ADR-0005); overwrite only the facets the correction supplies.
+      const fm = { ...parsed.frontmatter, updated: this.#now() };
+      if (input.output.title !== undefined) fm.title = input.output.title;
+      if (input.output.type !== undefined) fm.type = input.output.type;
+      if (input.output.tags !== undefined) fm.tags = normalizeTags(input.output.tags);
 
       const captureId = this.#newId();
       return {
@@ -358,7 +352,8 @@ export class GitHubRestBackend implements WriteClient {
       if (input.since && parsed.frontmatter.created < input.since) continue;
       summaries.push(toSummary(entry.path, parsed.frontmatter));
     }
-    // Path order ≈ created order (ULID time-prefix); sort the page precisely.
+    // Selection is by path (≈ ULID time); order the page by actual `created`,
+    // which diverges from path order for backdated imports.
     summaries.sort((a, b) => (a.created < b.created ? 1 : a.created > b.created ? -1 : 0));
     return summaries;
   }
@@ -510,8 +505,10 @@ export class GitHubRestBackend implements WriteClient {
       'GET',
       `/git/blobs/${sha}`,
     );
-    const b64 = blob.content.replace(/\n/g, '');
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    if (blob.encoding !== 'base64') {
+      throw new UpstreamDownError(`unexpected blob encoding: ${blob.encoding}`);
+    }
+    const bytes = Uint8Array.from(atob(blob.content.replace(/\n/g, '')), (c) => c.charCodeAt(0));
     return new TextDecoder().decode(bytes);
   }
 
@@ -606,16 +603,23 @@ export class GitHubRestBackend implements WriteClient {
 
 // --- module helpers --------------------------------------------------------
 
+// id is escaped before interpolation: callers validate ULIDs, but the backend
+// is also callable directly, and an unescaped id with regex metachars would
+// mis-resolve or throw.
 function findNote(id: string, entries: TreeEntry[]): { path: string; sha: string } | null {
-  const re = new RegExp(`^notes/\\d{4}/\\d{2}/${id}-.*\\.md$`);
+  const re = new RegExp(`^notes/\\d{4}/\\d{2}/${escapeRegExp(id)}-.*\\.md$`);
   const hit = entries.find((e) => e.type === 'blob' && re.test(e.path));
   return hit ? { path: hit.path, sha: hit.sha } : null;
 }
 
 function findSource(sourceId: string, entries: TreeEntry[]): { path: string; sha: string } | null {
-  const re = new RegExp(`^sources/\\d{4}/\\d{2}/${sourceId}\\.md$`);
+  const re = new RegExp(`^sources/\\d{4}/\\d{2}/${escapeRegExp(sourceId)}\\.md$`);
   const hit = entries.find((e) => e.type === 'blob' && re.test(e.path));
   return hit ? { path: hit.path, sha: hit.sha } : null;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 const NOTE_PATH = /^notes\/\d{4}\/\d{2}\/[0-9A-HJKMNP-TV-Z]{26}-.*\.md$/;
