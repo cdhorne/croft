@@ -11,8 +11,11 @@ import {
   cmdCorrect,
   cmdDelete,
   cmdInit,
+  cmdList,
   cmdRead,
+  cmdSearch,
   cmdStatus,
+  cmdTags,
   cmdUndo,
   cmdWorkspaces,
 } from './commands.ts';
@@ -31,6 +34,9 @@ commands:
   undo <capture-id>                      remove a just-captured note
   delete <id>                            delete a note + its source
   read <id> [--raw] [--json]             render a note
+  search QUERY [--limit=N]               FTS5 search over the local index
+  list [--group=tag|type|day] [--since=] recent or grouped listing
+  tags [--prefix=…]                      tag counts
   status                                 workspace + mirror state
   workspaces                             list configured workspaces
 
@@ -47,15 +53,15 @@ const COMMANDS: Record<string, Handler> = {
   undo: cmdUndo,
   delete: cmdDelete,
   read: cmdRead,
+  search: cmdSearch,
+  list: cmdList,
+  tags: cmdTags,
   status: cmdStatus,
   workspaces: cmdWorkspaces,
 };
 
 // Commands whose landing is sequenced later in Phase 2.
 const PENDING: Record<string, string> = {
-  search: 'Phase 2c (local FTS index)',
-  list: 'Phase 2c (local FTS index)',
-  tags: 'Phase 2c (local FTS index)',
   import: 'Phase 2d (bulk importer)',
   mcp: 'a later Phase 2 unit',
   serve: 'a later Phase 2 unit',

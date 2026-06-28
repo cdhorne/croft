@@ -19,7 +19,8 @@
     "build": "bun build ./src/index.ts --compile --outfile ./dist/zonot"
   },
   "dependencies": {
-    "@zonot/core": "workspace:*"
+    "@zonot/core": "workspace:*",
+    "isomorphic-git": "^1.38.5"
   },
   "publishConfig": {
     "access": "public",

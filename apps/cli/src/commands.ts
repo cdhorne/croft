@@ -1,22 +1,30 @@
 // Command handlers (cli-spec §1.2). Each resolves its workspace + backend, calls
-// the core WriteClient, and emits per the output discipline. Read-side search/
-// list/tags land with the local FTS index (Phase 2c); they stub for now.
+// the core WriteClient (writes) or the local FTS index (reads), and emits per the
+// output discipline.
 
 import { existsSync } from 'node:fs';
-import type { NoteRecord, WriteResult } from '@zonot/core/schema';
+import type {
+  ListGroupBy,
+  NoteRecord,
+  NoteSummary,
+  TagSummary,
+  WriteResult,
+} from '@zonot/core/schema';
 import type { ParsedArgs } from './args.ts';
-import { flagBool, flagStr } from './args.ts';
+import { flagBool, flagNum, flagStr } from './args.ts';
 import { buildBackend } from './backend.ts';
 import { parseInline } from './capture-parse.ts';
 import {
   ConfigError,
   defaultMirrorPath,
   loadConfig,
+  paths,
   resolveWorkspace,
   saveConfig,
   type WorkspaceConfig,
 } from './config.ts';
-import { EXIT, emit, makeStyle } from './output.ts';
+import { type Index, openIndex } from './index-store.ts';
+import { EXIT, emit, emitLines, makeStyle } from './output.ts';
 
 interface Ctx {
   name: string;
@@ -175,6 +183,80 @@ export async function cmdRead(args: ParsedArgs): Promise<number> {
   }
   emit(args, note, () => renderNote(args, note));
   return EXIT.ok;
+}
+
+// --- search / list / tags (local FTS index) --------------------------------
+
+async function withIndex<T>(
+  args: ParsedArgs,
+  fn: (index: Index, workspace: string) => T,
+): Promise<T> {
+  const { name, ws } = resolveWorkspace(loadConfig(), flagStr(args.flags, 'workspace'));
+  if (!ws.mirror_path) throw new ConfigError(`workspace "${name}" has no mirror_path`);
+  const index = await openIndex(name, ws.mirror_path, paths().dataDir);
+  try {
+    return fn(index, name);
+  } finally {
+    index.close();
+  }
+}
+
+export async function cmdSearch(args: ParsedArgs): Promise<number> {
+  const q = args.positionals[0];
+  if (!q) throw new ConfigError('missing search query');
+  const page = await withIndex(args, (index, workspace) =>
+    index.engine.search({ workspace, q, ...optLimit(args) }),
+  );
+  emitLines(args, page.results, (r) => renderSummary(args, r as NoteSummary));
+  return EXIT.ok;
+}
+
+export async function cmdList(args: ParsedArgs): Promise<number> {
+  const group = flagStr(args.flags, 'group') as ListGroupBy | undefined;
+  const since = flagStr(args.flags, 'since');
+  await withIndex(args, (index, workspace) => {
+    const s = makeStyle(args);
+    if (group) {
+      const page = index.engine.list({ workspace, group_by: group, ...optLimit(args) });
+      emitLines(args, page.groups, (g) => {
+        const bucket = g as { key: string; count: number };
+        return `${s.accent(bucket.key)} ${s.muted(`(${bucket.count})`)}`;
+      });
+    } else {
+      const recent = index.engine.listRecent({
+        workspace,
+        ...(since ? { since } : {}),
+        ...optLimit(args),
+      });
+      emitLines(args, recent, (r) => renderSummary(args, r as NoteSummary));
+    }
+  });
+  return EXIT.ok;
+}
+
+export async function cmdTags(args: ParsedArgs): Promise<number> {
+  const prefix = flagStr(args.flags, 'prefix');
+  const tags = await withIndex(args, (index, workspace) =>
+    index.engine.listTags({ workspace, ...(prefix ? { prefix } : {}) }),
+  );
+  const s = makeStyle(args);
+  emitLines(args, tags, (t) => {
+    const tag = t as TagSummary;
+    return `${s.accent(`#${tag.tag}`)} ${s.muted(`(${tag.count})`)}`;
+  });
+  return EXIT.ok;
+}
+
+function optLimit(args: ParsedArgs): { limit?: number } {
+  const limit = flagNum(args.flags, 'limit');
+  return limit === undefined ? {} : { limit };
+}
+
+function renderSummary(args: ParsedArgs, r: NoteSummary): string {
+  const s = makeStyle(args);
+  const tags = r.tags.length ? `  ${r.tags.map((t) => s.accent(`#${t}`)).join(' ')}` : '';
+  const snippet = r.snippet ? `\n  ${s.muted(r.snippet)}` : '';
+  return `${s.bold(r.title || r.id)}  ${s.muted(r.path)}${tags}${snippet}`;
 }
 
 // --- introspection ---------------------------------------------------------

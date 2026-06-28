@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      isomorphic-git:
+        specifier: ^1.38.5
+        version: 1.38.5
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.0
@@ -26,6 +30,9 @@ importers:
       '@zonot/core':
         specifier: workspace:*
         version: link:../../packages/core
+      isomorphic-git:
+        specifier: ^1.38.5
+        version: 1.38.5
 
   apps/mobile:
     dependencies:
