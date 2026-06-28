@@ -1,20 +1,78 @@
-import type { ExecutionContext } from '@cloudflare/workers-types';
+// @zonot/worker — Cloudflare Worker entry point (worker-spec / ADR-0035).
+//
+// One root middleware: assign a trace id, run the router, and translate any
+// thrown error into an RFC 9457 problem. Every response carries zonot-trace-id;
+// every request emits one content-free structured log line on completion.
+//
+// Phase 1(a) lands the middleware + dispatch + observability spine. The MCP +
+// HTTP route table (1(e)) and `init` (1(f)) plug into `route()` next.
 
-// @zonot/worker — Cloudflare Worker entry point.
-// Phase 1 surface (per ROADMAP):
-//   - createMcpHandler over the shared core handlers (ADR-0022)
-//   - GitHub REST write backend (ADR-0022 / docs/specs/core-spec.md §3)
-//   - RFC 9457 error discipline + zonot-trace-id (ADR-0035)
-//   - Workspace dispatch + per-tenant rate limiter (ADR-0035 §3)
-//   - Sentry from v1.0 (ADR-0035 §2.3)
+import type { ExecutionContext } from '@cloudflare/workers-types';
+import { NotFoundError } from '@zonot/core/errors';
+import type { Env, RequestContext } from './env.ts';
+import { logRequest } from './log.ts';
+import { isServerError, problemResponse, toZonotProblem } from './problem.ts';
+import { newTraceId, withTraceHeader } from './trace.ts';
 
 export default {
-  async fetch(_request: Request, _env: unknown, _ctx: ExecutionContext): Promise<Response> {
-    // Phase 1 scaffolding: implementation lands as the spec drives.
-    // See: docs/specs/worker-spec.md
-    return new Response('zonot-worker: scaffold', {
-      status: 503,
-      headers: { 'content-type': 'text/plain' },
-    });
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+    const trace_id = newTraceId();
+    const startedAt = Date.now();
+    const url = new URL(request.url);
+
+    try {
+      const res = await route(request, env, { trace_id });
+      logRequest({
+        trace_id,
+        workspace_hash: null,
+        op: null,
+        method: request.method,
+        path_shape: pathShape(url.pathname),
+        status: res.status,
+        latency_ms: Date.now() - startedAt,
+        error_type: null,
+      });
+      return withTraceHeader(res, trace_id);
+    } catch (err) {
+      const problem = toZonotProblem(err, trace_id);
+      if (isServerError(problem)) {
+        // 1(e) wires Sentry.captureException here (content-stripped; §2.3).
+        console.error(JSON.stringify({ trace_id, level: 'error', error_type: problem.title }));
+      }
+      logRequest({
+        trace_id,
+        workspace_hash: null,
+        op: null,
+        method: request.method,
+        path_shape: pathShape(url.pathname),
+        status: problem.status,
+        latency_ms: Date.now() - startedAt,
+        error_type: problem.title,
+      });
+      return problemResponse(problem);
+    }
   },
 };
+
+/**
+ * Route table. Phase 1(a): a health probe only; unknown paths 404 as a problem.
+ * The write/read/MCP routes mount here in 1(e).
+ */
+async function route(request: Request, _env: Env, _ctx: RequestContext): Promise<Response> {
+  const url = new URL(request.url);
+
+  if (request.method === 'GET' && url.pathname === '/healthz') {
+    return Response.json({ status: 'ok', service: 'zonot-worker' });
+  }
+
+  // Until the route table lands, everything else is unrouted. Surface it as a
+  // proper RFC 9457 not-found rather than a bare 404.
+  throw new NotFoundError(`route ${request.method} ${url.pathname}`);
+}
+
+/** Collapse concrete ids/slugs to a route template so logs stay content-free. */
+function pathShape(pathname: string): string {
+  return pathname
+    .replace(/\/[0-9A-HJKMNP-TV-Z]{26}(?:-[^/]*)?/g, '/:id')
+    .replace(/\/v1\/w\/[^/]+/, '/v1/w/:workspace');
+}
