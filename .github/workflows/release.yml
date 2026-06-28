@@ -1,0 +1,72 @@
+name: release
+
+# Tag a release: `git tag v1.2.3 && git push --tags`. Builds the standalone
+# single binaries (curl/Homebrew path) and publishes the npm package with
+# provenance attestations (ADR-0023). Manual re-run via workflow_dispatch.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the GitHub Release + upload binaries
+  id-token: write # npm provenance (OIDC)
+
+jobs:
+  binaries:
+    name: standalone binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Bun cross-compiles every target from this one Linux runner.
+      - name: Build binaries + checksums
+        working-directory: apps/cli
+        run: bun run build:dist
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/cli/dist/zonot-*
+            apps/cli/dist/checksums.txt
+          generate_release_notes: true
+
+  npm:
+    name: npm publish (provenance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # pnpm publish (not npm) resolves the workspace: protocol; prepublishOnly
+      # bundles dist/index.js with core + deps inlined (no runtime deps shipped).
+      - name: Publish
+        working-directory: apps/cli
+        run: pnpm publish --provenance --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -5,10 +5,10 @@
   "description": "Zonot CLI — calm capture, deep notes, plain Markdown in your own GitHub repo.",
   "license": "FSL-1.1-ALv2",
   "bin": {
-    "zonot": "./src/index.ts"
+    "zonot": "./dist/index.js"
   },
   "files": [
-    "dist",
+    "dist/index.js",
     "README.md",
     "LICENSE"
   ],
@@ -16,9 +16,13 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests",
     "dev": "bun run ./src/index.ts",
-    "build": "bun build ./src/index.ts --compile --outfile ./dist/zonot"
+    "build": "bun run build:npm",
+    "build:npm": "bun build ./src/index.ts --target bun --outfile ./dist/index.js",
+    "build:bin": "bun build ./src/index.ts --compile --outfile ./dist/zonot",
+    "build:dist": "bun scripts/build-binaries.ts",
+    "prepublishOnly": "bun run build:npm"
   },
-  "dependencies": {
+  "devDependencies": {
     "@zonot/core": "workspace:*",
     "isomorphic-git": "^1.38.5"
   },
