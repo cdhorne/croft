@@ -44,11 +44,15 @@ function resolve(args: ParsedArgs): Ctx {
 async function resolveBody(args: ParsedArgs, index: number): Promise<string | undefined> {
   const pos = args.positionals[index];
   if (pos !== undefined) return pos;
-  if (!process.stdin.isTTY) {
-    const piped = await Bun.stdin.text();
-    return piped.replace(/\n$/, '');
-  }
+  if (!process.stdin.isTTY) return (await readStdin()).replace(/\n$/, '');
   return undefined;
+}
+
+/** Read all of stdin — portable across Node and Bun (both async-iterate it). */
+async function readStdin(): Promise<string> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Uint8Array);
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 function requireId(args: ParsedArgs, index: number, label = 'id'): string {

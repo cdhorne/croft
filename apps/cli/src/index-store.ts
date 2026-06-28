@@ -8,7 +8,7 @@ import nodeFs, { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from
 import { parseNoteFile, parseSourceFile } from '@zonot/core';
 import { IndexWriter, SearchEngine, type SqliteAdapter } from '@zonot/core/fts';
 import git from 'isomorphic-git';
-import { openBunSqlite } from './sqlite.ts';
+import { openSqlite } from './sqlite.ts';
 
 export interface Index {
   engine: SearchEngine;
@@ -26,13 +26,13 @@ export async function openIndex(
   const dbPath = `${dir}/zonot.sqlite`;
   const head = (await currentHead(mirrorPath)) ?? '';
 
-  let adapter = openBunSqlite(dbPath);
+  let adapter = await openSqlite(dbPath);
   new IndexWriter(adapter).ensureSchema();
 
   if (getMeta(adapter, 'indexed_head') !== head) {
     adapter.close();
     removeDb(dbPath);
-    adapter = openBunSqlite(dbPath);
+    adapter = await openSqlite(dbPath);
     const writer = new IndexWriter(adapter);
     writer.ensureSchema();
     adapter.transaction(() => indexAll(writer, workspace, mirrorPath)); // one commit, not N

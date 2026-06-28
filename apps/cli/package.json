@@ -17,10 +17,14 @@
     "test": "bun test --pass-with-no-tests",
     "dev": "bun run ./src/index.ts",
     "build": "bun run build:npm",
-    "build:npm": "bun build ./src/index.ts --target bun --outfile ./dist/index.js",
-    "build:bin": "bun build ./src/index.ts --compile --outfile ./dist/zonot",
+    "build:npm": "bun build ./src/index.ts --target node --external bun:sqlite --outfile ./dist/index.js",
+    "build:bin": "bun build ./src/index.ts --compile --external node:sqlite --outfile ./dist/zonot",
     "build:dist": "bun scripts/build-binaries.ts",
     "prepublishOnly": "bun run build:npm"
+  },
+  "engines": {
+    "node": ">=22",
+    "bun": ">=1.2"
   },
   "devDependencies": {
     "@zonot/core": "workspace:*",

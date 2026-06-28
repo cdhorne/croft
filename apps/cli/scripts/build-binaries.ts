@@ -17,7 +17,7 @@ const TARGETS: Array<{ target: string; out: string }> = [
 
 for (const { target, out } of TARGETS) {
   console.log(`compiling ${out} (${target})…`);
-  await $`bun build ./src/index.ts --compile --target=${target} --outfile ./dist/${out}`;
+  await $`bun build ./src/index.ts --compile --target=${target} --external node:sqlite --outfile ./dist/${out}`;
 }
 
 // SHA-256 checksums for the installer + Homebrew formula to verify against.

@@ -1,8 +1,13 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // @zonot/cli entry point (cli-spec §1, §8). Parse args, dispatch, and map any
 // thrown error to a stderr message + an exit code that carries the class. A
 // per-invocation trace id ties an error to the (future) local JSONL log.
+//
+// Runs on Node or Bun. Search uses SQLite (node:sqlite / bun:sqlite); on Node 22
+// node:sqlite needs --experimental-sqlite, so a search-family command transparently
+// re-execs with the flag (removed when node:sqlite is stable / on Bun).
 
+import { createRequire } from 'node:module';
 import { generateUlid } from '@zonot/core';
 import { type ParsedArgs, parseArgs } from './args.ts';
 import {
@@ -73,6 +78,8 @@ const PENDING: Record<string, string> = {
   completion: 'a later Phase 2 unit',
 };
 
+const SQLITE_COMMANDS = new Set(['search', 'list', 'tags']);
+
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
 
@@ -83,6 +90,12 @@ async function main(): Promise<number> {
   if (!args.command || args.flags.help === true || args.command === 'help') {
     process.stdout.write(HELP);
     return EXIT.ok;
+  }
+
+  // node:sqlite on Node 22 is gated behind a flag; re-exec with it so search
+  // "just works" without the user knowing. No-op on Bun / stable node:sqlite.
+  if (args.command && SQLITE_COMMANDS.has(args.command) && needsSqliteReexec()) {
+    return reexecWithSqlite();
   }
 
   const handler = COMMANDS[args.command];
@@ -97,6 +110,34 @@ async function main(): Promise<number> {
 
   process.stderr.write(`zonot: unknown command "${args.command}"\n\n${HELP}`);
   return EXIT.user;
+}
+
+/** True only on Node where node:sqlite isn't loadable yet (needs the flag). */
+function needsSqliteReexec(): boolean {
+  if (process.versions.bun) return false; // Bun has bun:sqlite
+  if (process.env.ZONOT_SQLITE_REEXEC) return false; // already re-execed
+  try {
+    createRequire(import.meta.url)('node:sqlite');
+    return false; // stable (Node 24+) — no flag needed
+  } catch {
+    return true;
+  }
+}
+
+async function reexecWithSqlite(): Promise<number> {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const r = spawnSync(
+    process.execPath,
+    [
+      '--experimental-sqlite',
+      '--no-warnings',
+      fileURLToPath(import.meta.url),
+      ...process.argv.slice(2),
+    ],
+    { stdio: 'inherit', env: { ...process.env, ZONOT_SQLITE_REEXEC: '1' } },
+  );
+  return r.status ?? EXIT.internal;
 }
 
 const traceId = generateUlid();
