@@ -11,9 +11,7 @@
 //
 // Idempotency (core-spec §3.4) is an operator concern handled ABOVE this backend
 // (Worker KV / CLI sqlite), so idempotency_key is accepted but not consulted here.
-//
-// Imported only by clone-less runtimes (the Worker); other consumers skip this
-// subpath so the isomorphic-git backend never enters their bundle.
+// Imported only by the Worker (keeps isomorphic-git out of the edge bundle).
 
 import {
   assembleNoteFile,

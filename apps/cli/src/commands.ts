@@ -3,6 +3,7 @@
 // output discipline.
 
 import { existsSync } from 'node:fs';
+import { assembleNoteFile } from '@zonot/core';
 import type {
   ListGroupBy,
   NoteRecord,
@@ -24,7 +25,7 @@ import {
   type WorkspaceConfig,
 } from './config.ts';
 import { type Index, openIndex } from './index-store.ts';
-import { EXIT, emit, emitLines, makeStyle } from './output.ts';
+import { EXIT, emit, emitLines, makeStyle, wantJson } from './output.ts';
 
 interface Ctx {
   name: string;
@@ -86,11 +87,7 @@ export async function cmdInit(args: ParsedArgs): Promise<number> {
 
 export async function cmdCapture(args: ParsedArgs): Promise<number> {
   const ctx = resolve(args);
-  const body = await resolveBody(args, 0);
-  if (body === undefined || body.trim() === '') {
-    throw new ConfigError('provide a body argument or pipe one on stdin');
-  }
-
+  const body = (await resolveBody(args, 0)) ?? '';
   const inline = parseInline(body);
   const flagTags = (flagStr(args.flags, 'tags') ?? '')
     .split(',')
@@ -99,14 +96,17 @@ export async function cmdCapture(args: ParsedArgs): Promise<number> {
   const title = flagStr(args.flags, 'title');
   const type = flagStr(args.flags, 'type') ?? inline.type;
   const thread = flagStr(args.flags, 'thread') ?? inline.thread;
+  const tags = [...inline.tags, ...flagTags];
+
+  // Empty-body capture is allowed (core-spec §6) but only when there's some
+  // facet to capture — a title or tags — so a bare `zonot capture` isn't a no-op.
+  if (body.trim() === '' && !title && tags.length === 0) {
+    throw new ConfigError('provide a body (argument or stdin) or at least --title / --tags');
+  }
+
   const result = await ctx.backend.capture({
     workspace: ctx.name,
-    output: {
-      body,
-      tags: [...inline.tags, ...flagTags],
-      ...(title ? { title } : {}),
-      ...(type ? { type } : {}),
-    },
+    output: { body, tags, ...(title ? { title } : {}), ...(type ? { type } : {}) },
     ...(thread ? { thread } : {}),
   });
   emitWrite(args, result, 'captured');
@@ -178,7 +178,8 @@ export async function cmdRead(args: ParsedArgs): Promise<number> {
     include_source: flagBool(args.flags, 'include-source'),
   });
   if (flagBool(args.flags, 'raw')) {
-    process.stdout.write(`${note.raw_body}\n`);
+    // Full file bytes (cli-spec §2.1) — frontmatter block + body, not body alone.
+    process.stdout.write(assembleNoteFile(note.frontmatter, note.raw_body));
     return EXIT.ok;
   }
   emit(args, note, () => renderNote(args, note));
@@ -282,13 +283,13 @@ export function cmdWorkspaces(args: ParsedArgs): number {
     backend: ws.backend,
     default: name === config.default_workspace,
   }));
-  emit(args, rows, () =>
-    rows.length === 0
-      ? s.muted('no workspaces configured — run `zonot init`')
-      : rows
-          .map((r) => `${r.default ? s.accent('*') : ' '} ${r.name} ${s.muted(`(${r.backend})`)}`)
-          .join('\n'),
-  );
+  emitLines(args, rows, (r) => {
+    const row = r as (typeof rows)[number];
+    return `${row.default ? s.accent('*') : ' '} ${row.name} ${s.muted(`(${row.backend})`)}`;
+  });
+  if (rows.length === 0 && !wantJson(args) && args.flags.quiet !== true) {
+    process.stdout.write(`${s.muted('no workspaces configured — run `zonot init`')}\n`);
+  }
   return EXIT.ok;
 }
 

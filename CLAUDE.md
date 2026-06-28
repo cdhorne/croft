@@ -158,6 +158,11 @@ ADRs. Known up front:
 - **Worker tree-walk reads (`listRecent`/`listTags`) are O(repo) per call** — they parse note blobs
   on every request because there's no edge index until v1.2 (ADR-0009). Don't build faceted
   `list`/search on this path; it's the deliberate placeholder the materialized index supersedes. (Phase 1)
+- **The CLI's local FTS index rebuilds by recreating the db file**, not by clearing rows — FTS5
+  contentless tables (`content=''`) don't support `DELETE FROM ftstable` (only per-rowid delete).
+  The index is disposable (ADR-0001), so delete-the-file-and-reindex is the simplest correct reset.
+  Rebuild is gated on git HEAD moving since the last build (covers commits/pulls, not uncommitted
+  working-tree edits). (Phase 2c)
 
 ## Running things
 

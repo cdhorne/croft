@@ -120,19 +120,32 @@ describe('command loop (init → capture → read → append → correct → und
     );
   });
 
-  test('delete removes the note', async () => {
+  test('delete removes the note (subsequent read 404s)', async () => {
     await run(() => cmdInit(parseArgs(['init'])));
     const cap = await run<{ id: string }>(() => cmdCapture(parseArgs(['capture', 'doomed'])));
-    const del = await run(() => cmdDelete(parseArgs(['delete', cap.json.id])));
-    expect(del.code).toBe(0);
+    expect((await run(() => cmdDelete(parseArgs(['delete', cap.json.id])))).code).toBe(0);
+    await expect(run(() => cmdRead(parseArgs(['read', cap.json.id])))).rejects.toBeInstanceOf(
+      Error,
+    );
   });
 
-  test('workspaces lists the configured workspace as default', async () => {
+  test('capture with no body but a title is allowed (empty-body capture)', async () => {
     await run(() => cmdInit(parseArgs(['init'])));
-    const ws = await run<Array<{ name: string; default: boolean }>>(() =>
+    const cap = await asTty(() =>
+      run<{ id: string }>(() => cmdCapture(parseArgs(['capture', '--title=Just a title']))),
+    );
+    const note = await run<{ frontmatter: { title: string } }>(() =>
+      cmdRead(parseArgs(['read', cap.json.id])),
+    );
+    expect(note.json.frontmatter.title).toBe('Just a title');
+  });
+
+  test('workspaces lists the configured workspace as default (NDJSON, one per line)', async () => {
+    await run(() => cmdInit(parseArgs(['init'])));
+    const ws = await runLines<{ name: string; default: boolean }>(() =>
       cmdWorkspaces(parseArgs(['workspaces'])),
     );
-    expect(ws.json[0]).toMatchObject({ name: 'personal', default: true });
+    expect(ws[0]).toMatchObject({ name: 'personal', default: true });
   });
 });
 

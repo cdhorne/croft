@@ -19,12 +19,7 @@ export function wantJson(args: ParsedArgs): boolean {
 }
 
 function colorEnabled(args: ParsedArgs): boolean {
-  return (
-    process.stdout.isTTY &&
-    !process.env.NO_COLOR &&
-    args.flags.color !== false &&
-    args.flags['no-color'] !== true
-  );
+  return Boolean(process.stdout.isTTY) && !process.env.NO_COLOR && args.flags['no-color'] !== true;
 }
 
 const CODES = { accent: 36, muted: 2, danger: 31, bold: 1 } as const;

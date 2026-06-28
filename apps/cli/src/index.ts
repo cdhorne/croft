@@ -90,7 +90,7 @@ async function main(): Promise<number> {
     process.stderr.write(
       `zonot ${args.command}: not yet implemented — lands in ${PENDING[args.command]}\n`,
     );
-    return EXIT.ok;
+    return EXIT.user;
   }
 
   process.stderr.write(`zonot: unknown command "${args.command}"\n\n${HELP}`);
@@ -98,6 +98,12 @@ async function main(): Promise<number> {
 }
 
 const traceId = generateUlid();
+// Set exitCode and let the event loop drain — calling process.exit() here would
+// truncate buffered stdout when output is piped (e.g. `zonot list | jq`).
 main()
-  .then((code) => process.exit(code))
-  .catch((err) => process.exit(renderError(parseArgs(process.argv.slice(2)), err, traceId)));
+  .then((code) => {
+    process.exitCode = code;
+  })
+  .catch((err) => {
+    process.exitCode = renderError(parseArgs(process.argv.slice(2)), err, traceId);
+  });

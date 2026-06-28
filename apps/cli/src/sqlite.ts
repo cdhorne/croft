@@ -2,7 +2,7 @@
 // file-backed Database in the core SqliteAdapter contract; the index is
 // derivable/disposable (ADR-0001), so WAL + relaxed sync is fine.
 
-import { Database } from 'bun:sqlite';
+import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import type { SqliteAdapter, SqliteStatement } from '@zonot/core/fts';
 
 export function openBunSqlite(path: string): SqliteAdapter {
@@ -18,14 +18,14 @@ export function openBunSqlite(path: string): SqliteAdapter {
       const stmt = db.prepare(sql);
       return {
         run(...params: ReadonlyArray<unknown>) {
-          const r = stmt.run(...(params as never[]));
+          const r = stmt.run(...(params as SQLQueryBindings[]));
           return { changes: r.changes, lastInsertRowid: r.lastInsertRowid };
         },
         get<T = Record<string, unknown>>(...params: ReadonlyArray<unknown>): T | undefined {
-          return stmt.get(...(params as never[])) as T | undefined;
+          return stmt.get(...(params as SQLQueryBindings[])) as T | undefined;
         },
         all<T = Record<string, unknown>>(...params: ReadonlyArray<unknown>): T[] {
-          return stmt.all(...(params as never[])) as T[];
+          return stmt.all(...(params as SQLQueryBindings[])) as T[];
         },
       };
     },

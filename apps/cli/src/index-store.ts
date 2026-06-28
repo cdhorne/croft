@@ -1,7 +1,8 @@
 // Local FTS index orchestration (cli-spec §3). The index at <data>/<ws>/zonot.sqlite
-// is derivable from the mirror (ADR-0001), so it's rebuilt whenever git HEAD has
-// moved since it was last built — which covers CLI writes AND external edits/pulls.
-// Rebuild recreates the db file fresh (avoids FTS5 contentless delete-all quirks).
+// is derivable from the mirror (ADR-0001) and rebuilt whenever git HEAD has moved
+// since it was last built — covering CLI writes and external commits/pulls (an
+// uncommitted working-tree edit is not detected). Rebuild is a full O(repo)
+// re-index (not incremental — fine at v1 scale) into a freshly recreated db file.
 
 import nodeFs, { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { parseNoteFile, parseSourceFile } from '@zonot/core';
@@ -34,7 +35,7 @@ export async function openIndex(
     adapter = openBunSqlite(dbPath);
     const writer = new IndexWriter(adapter);
     writer.ensureSchema();
-    indexAll(writer, workspace, mirrorPath);
+    adapter.transaction(() => indexAll(writer, workspace, mirrorPath)); // one commit, not N
     setMeta(adapter, 'indexed_head', head);
   }
 
@@ -88,7 +89,7 @@ function mdFiles(mirrorPath: string, sub: string): string[] {
   if (!existsSync(root)) return [];
   return readdirSync(root, { recursive: true })
     .filter((p): p is string => typeof p === 'string' && p.endsWith('.md'))
-    .map((p) => `${sub}/${p}`);
+    .map((p) => `${sub}/${p.replaceAll('\\', '/')}`); // canonical forward-slash paths on Windows too
 }
 
 function read(mirrorPath: string, rel: string): string {

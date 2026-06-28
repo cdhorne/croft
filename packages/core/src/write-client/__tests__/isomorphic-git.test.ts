@@ -89,6 +89,15 @@ describe('IsomorphicGitBackend', () => {
     expect(note.source?.body).toBe('raw transcript\n');
   });
 
+  test('no source node when raw === body, or raw is absent (core-spec §6)', async () => {
+    const backend = makeBackend();
+    await backend.init({ workspace: 'personal', conventionVersion: 1 });
+    const same = await backend.capture({ workspace: 'personal', output: { body: 'x' }, raw: 'x' });
+    expect(same.source_path).toBeUndefined();
+    const none = await backend.capture({ workspace: 'personal', output: { body: 'y' } });
+    expect(none.source_path).toBeUndefined();
+  });
+
   test('append is SHA-conditional and stamps updated', async () => {
     const backend = makeBackend();
     await backend.init({ workspace: 'personal', conventionVersion: 1 });

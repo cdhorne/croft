@@ -17,4 +17,13 @@ describe('parseInline', () => {
     // "C#" — the # is not preceded by whitespace/start, so it is not a tag.
     expect(parseInline('I like C# a lot').tags).toEqual([]);
   });
+
+  test('numeric/leading-digit tags and a leading #tag are picked up', () => {
+    expect(parseInline('#2026-goals and #q3').tags).toEqual(['2026-goals', 'q3']);
+  });
+
+  test('!type only matches at a token boundary, not mid-word', () => {
+    expect(parseInline('do this!now please').type).toBeUndefined(); // "this!now" is not a !type
+    expect(parseInline('urgent !task').type).toBe('task');
+  });
 });

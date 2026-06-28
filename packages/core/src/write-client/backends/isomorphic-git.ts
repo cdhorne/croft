@@ -5,9 +5,8 @@
 //
 // The fs is injected (CLI: node:fs; mobile: a virtual fs) so the core never
 // imports node:fs directly. SHA-conditional ops compare the caller's base_sha to
-// the working-tree file's git blob sha (same sha semantics as the GitHub backend,
-// since both are git blob hashes). Workers never import this subpath, so
-// isomorphic-git's weight stays out of the edge bundle.
+// the working-tree file's git blob sha — same sha semantics as the GitHub backend
+// (both are git blob hashes). Imported only by clone-holders, never the Worker.
 
 import git, { type FsClient } from 'isomorphic-git';
 import { assembleNoteFile, parseNoteFile, parseSourceFile } from '../../convention/index.ts';
