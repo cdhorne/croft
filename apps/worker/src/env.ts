@@ -15,6 +15,8 @@ export interface AnalyticsEngine {
 export interface Env {
   /** Secret: JSON map of workspace → { owner, repo, token, path_secret }. */
   WORKSPACE_MAP_JSON: string;
+  /** Idempotency cache (24h TTL). Absent in dev → idempotency is a no-op. */
+  IDEMPOTENCY?: import('@cloudflare/workers-types').KVNamespace;
   /** Rate-limit binding (absent in local dev). */
   RATE_LIMITER?: RateLimiter;
   /** Metrics binding (absent in local dev). */

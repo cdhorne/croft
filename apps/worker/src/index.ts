@@ -10,6 +10,7 @@
 import type { ExecutionContext } from '@cloudflare/workers-types';
 import { NotFoundError } from '@zonot/core/errors';
 import type { Env, RequestContext } from './env.ts';
+import { handleHttp } from './http.ts';
 import { logRequest } from './log.ts';
 import { isServerError, problemResponse, toZonotProblem } from './problem.ts';
 import { newTraceId, withTraceHeader } from './trace.ts';
@@ -58,15 +59,18 @@ export default {
  * Route table. Phase 1(a): a health probe only; unknown paths 404 as a problem.
  * The write/read/MCP routes mount here in 1(e).
  */
-async function route(request: Request, _env: Env, _ctx: RequestContext): Promise<Response> {
+async function route(request: Request, env: Env, ctx: RequestContext): Promise<Response> {
   const url = new URL(request.url);
 
   if (request.method === 'GET' && url.pathname === '/healthz') {
     return Response.json({ status: 'ok', service: 'zonot-worker' });
   }
 
-  // Until the route table lands, everything else is unrouted. Surface it as a
-  // proper RFC 9457 not-found rather than a bare 404.
+  // The HTTP transport (app + integrators). The MCP transport mounts in 1(e)-ii.
+  if (url.pathname.startsWith('/v1/')) {
+    return handleHttp(request, env, ctx.trace_id);
+  }
+
   throw new NotFoundError(`route ${request.method} ${url.pathname}`);
 }
 

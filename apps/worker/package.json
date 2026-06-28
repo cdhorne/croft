@@ -6,13 +6,14 @@
   "description": "Zonot Worker — MCP + HTTP tool surface on Cloudflare Workers.",
   "license": "FSL-1.1-ALv2",
   "scripts": {
-    "typecheck": "tsc -b",
+    "typecheck": "tsc --noEmit",
     "test": "bun test --pass-with-no-tests",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@zonot/core": "workspace:*"
+    "@zonot/core": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260615.1",
