@@ -73,10 +73,9 @@ export async function handleHttp(request: Request, env: Env, trace_id: string): 
   }
 
   // /notes/{id}[/{action}]
-  const noteRoute = rest[0] === 'notes' ? rest.slice(1) : null;
-  if (noteRoute && noteRoute[0]) {
-    const id = decodeURIComponent(noteRoute[0]);
-    const action = noteRoute[1];
+  if (rest[0] === 'notes' && rest[1]) {
+    const id = decodeURIComponent(rest[1]);
+    const action = rest[2];
 
     if (!action && method === 'GET') {
       const includeSource = isTruthy(url.searchParams.get('include_source'));

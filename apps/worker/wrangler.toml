@@ -3,9 +3,31 @@ main = "src/index.ts"
 compatibility_date = "2026-06-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Cloudflare configuration lands as the Worker takes shape (Phase 1).
-# See: docs/specs/worker-spec.md
-#   - KV bindings for tag vocab + entitlement (rev as v1.1 lands)
-#   - Rate limiter binding (ADR-0035 §3.2)
-#   - Workers AI binding (v1.2)
-#   - Logpush + Analytics Engine bindings
+# --- vars (non-secret) ------------------------------------------------------
+[vars]
+ENVIRONMENT = "dev"
+# RELEASE_SHA is injected at deploy time: wrangler deploy --var RELEASE_SHA:$(git rev-parse HEAD)
+
+# --- secrets (set via `wrangler secret put`, never committed) ---------------
+#   wrangler secret put WORKSPACE_MAP_JSON   # JSON: { "<workspace>": { owner, repo, token, path_secret } }
+#   wrangler secret put SENTRY_DSN           # operator Sentry DSN (wired in 1(e)-ii)
+
+# --- idempotency cache (core-spec §3.4; 24h TTL applied per-key in code) -----
+# Create with: wrangler kv namespace create IDEMPOTENCY
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "IDEMPOTENCY"
+id = "TODO_REPLACE_WITH_kv_namespace_id"
+
+# --- per-(workspace, op) rate limiter (worker-spec §3.2) --------------------
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "100"
+simple = { limit = 60, period = 60 } # 60 req/min/workspace at v1.0; tuned at v1.1
+
+# --- metrics (worker-spec §2.2) ---------------------------------------------
+[[analytics_engine_datasets]]
+binding = "METRICS"
+
+# v1.1+: entitlement KV + GitHub App bindings; v1.2: Workers AI + edge-search DO.
