@@ -75,3 +75,18 @@ export class ValidationError extends Error {
     super(detail);
   }
 }
+
+// A stored note/source file could not be parsed back into the convention shape
+// (missing frontmatter block, malformed YAML, or frontmatter that violates the
+// schema). This is a data-integrity condition in the user's repo — not a caller
+// error — so it maps to `internal` (500 + Sentry) at the transport, surfaced
+// with a trace id rather than silently swallowed.
+export class NoteFileParseError extends Error {
+  override readonly name = 'NoteFileParseError';
+  constructor(
+    public readonly path: string,
+    public readonly reason: string,
+  ) {
+    super(`failed to parse ${path}: ${reason}`);
+  }
+}
