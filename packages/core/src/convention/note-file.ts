@@ -47,6 +47,38 @@ export interface ParsedSourceFile {
   body: string;
 }
 
+/**
+ * Tolerantly split a leading `---` frontmatter block from arbitrary Markdown
+ * (e.g. a file being imported). Returns the raw YAML object (no schema check)
+ * and the body. Missing/malformed/unterminated frontmatter → `{ data: {}, body }`.
+ * Used by the importer (cli-spec §7.2); parseNoteFile is the strict counterpart.
+ */
+export function parseFrontmatterLoose(content: string): {
+  data: Record<string, unknown>;
+  body: string;
+} {
+  const lines = content.split('\n');
+  if ((lines[0] ?? '').trim() !== '---') return { data: {}, body: content };
+  let end = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if ((lines[i] ?? '').trim() === '---') {
+      end = i;
+      break;
+    }
+  }
+  if (end === -1) return { data: {}, body: content };
+  const body = lines.slice(end + 1).join('\n');
+  try {
+    const parsed = parseYaml(lines.slice(1, end).join('\n'));
+    return {
+      data: parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {},
+      body,
+    };
+  } catch {
+    return { data: {}, body };
+  }
+}
+
 export function parseNoteFile(content: string, path = '<note>'): ParsedNoteFile {
   const { yamlSrc, body } = splitFrontmatter(content, path);
   const data = parseYamlBlock(yamlSrc, path);

@@ -54,6 +54,14 @@ describe('buildCommitMessage', () => {
     expect(msg).toContain(`Delete-Of: ${NOTE_ID}`);
   });
 
+  test('import op emits Imported-From (before Model)', () => {
+    const msg = buildCommitMessage({
+      subject: 'import: 2 notes',
+      trailers: { source: 'import:zonot@0', captureId: CAPTURE_ID, importedFrom: 'a.md, b.md' },
+    });
+    expect(msg).toContain('Imported-From: a.md, b.md');
+  });
+
   test('Model trailer emitted only when present, last in order', () => {
     const msg = buildCommitMessage({
       subject: 'capture: enriched',

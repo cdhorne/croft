@@ -4,6 +4,7 @@ import type { NoteFrontmatter, SourceFrontmatter } from '../../schema/index.ts';
 import {
   assembleNoteFile,
   assembleSourceFile,
+  parseFrontmatterLoose,
   parseNoteFile,
   parseSourceFile,
 } from '../note-file.ts';
@@ -78,6 +79,19 @@ describe('parseNoteFile', () => {
       expect((err as NoteFileParseError).path).toBe('notes/2026/06/bad.md');
       expect((err as Error).message).toContain('created');
     }
+  });
+});
+
+describe('parseFrontmatterLoose', () => {
+  test('extracts arbitrary frontmatter + body; tolerant of missing/malformed', () => {
+    const r = parseFrontmatterLoose('---\ntitle: X\ntags:\n  - a\n  - b\n---\nbody here');
+    expect(r.data).toMatchObject({ title: 'X', tags: ['a', 'b'] });
+    expect(r.body).toBe('body here');
+
+    expect(parseFrontmatterLoose('no frontmatter')).toEqual({ data: {}, body: 'no frontmatter' });
+    // malformed YAML / unterminated → tolerant, no throw.
+    expect(parseFrontmatterLoose('---\nx: [oops\n---\nb').body).toBe('b');
+    expect(parseFrontmatterLoose('---\nx: 1\nno close').data).toEqual({});
   });
 });
 

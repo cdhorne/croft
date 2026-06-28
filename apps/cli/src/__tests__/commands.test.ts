@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,7 @@ import {
   cmdCapture,
   cmdCorrect,
   cmdDelete,
+  cmdImport,
   cmdInit,
   cmdList,
   cmdRead,
@@ -187,5 +189,51 @@ describe('local FTS (search / list / tags)', () => {
     expect(await runLines(() => cmdList(parseArgs(['list'])))).toHaveLength(1);
     await run(() => cmdCapture(parseArgs(['capture', 'second #b'])));
     expect(await runLines(() => cmdList(parseArgs(['list'])))).toHaveLength(2); // picked up the new note
+  });
+});
+
+describe('import (bulk)', () => {
+  function vault(): string {
+    const dir = join(home, 'vault');
+    mkdirSync(join(dir, 'sub'), { recursive: true });
+    writeFileSync(join(dir, 'a.md'), '---\ntitle: A\ntags: [x]\ndate: 2024-03-15\n---\nalpha #y\n');
+    writeFileSync(join(dir, 'sub', 'b.md'), 'plain beta #z\n');
+    return dir;
+  }
+
+  test('imports a folder; tags merge (frontmatter + inline); re-import is idempotent', async () => {
+    await run(() => cmdInit(parseArgs(['init'])));
+    const dir = vault();
+
+    const first = await run<{ committed: number; new: number }>(() =>
+      cmdImport(parseArgs(['import', dir])),
+    );
+    expect(first.json).toMatchObject({ committed: 2, new: 2 });
+    expect(await runLines(() => cmdList(parseArgs(['list'])))).toHaveLength(2);
+
+    const tags = await runLines<{ tag: string }>(() => cmdTags(parseArgs(['tags'])));
+    expect(tags.map((t) => t.tag).sort()).toEqual(['x', 'y', 'z']); // [x] + #y + #z
+
+    // a.md's frontmatter date drives the path year.
+    const hits = await runLines<{ path: string }>(() => cmdSearch(parseArgs(['search', 'alpha'])));
+    expect(hits[0]?.path).toMatch(/^notes\/2024\/03\//);
+
+    // Re-import: deterministic ids → updates, not duplicates.
+    const second = await run<{ new: number; update: number }>(() =>
+      cmdImport(parseArgs(['import', dir])),
+    );
+    expect(second.json).toMatchObject({ new: 0, update: 2 });
+    expect(await runLines(() => cmdList(parseArgs(['list'])))).toHaveLength(2); // still 2
+  });
+
+  test('--dry-run plans without writing anything', async () => {
+    await run(() => cmdInit(parseArgs(['init'])));
+    const dir = vault();
+    const plan = await runLines<{ from: string; status: string }>(() =>
+      cmdImport(parseArgs(['import', dir, '--dry-run'])),
+    );
+    expect(plan).toHaveLength(2);
+    expect(plan[0]).toMatchObject({ from: 'a.md', status: 'new' });
+    expect(await runLines(() => cmdList(parseArgs(['list'])))).toHaveLength(0); // nothing written
   });
 });

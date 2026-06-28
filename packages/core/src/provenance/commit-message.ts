@@ -4,7 +4,15 @@
 // Trailers are git-style (`Key: value`, one per line) in a single final paragraph.
 
 // Trailer keys, in the canonical emission order.
-const TRAILER_ORDER = ['Source', 'Capture-Id', 'Edit-Of', 'Undo-Of', 'Delete-Of', 'Model'] as const;
+const TRAILER_ORDER = [
+  'Source',
+  'Capture-Id',
+  'Edit-Of',
+  'Undo-Of',
+  'Delete-Of',
+  'Imported-From',
+  'Model',
+] as const;
 type TrailerKey = (typeof TRAILER_ORDER)[number];
 
 export interface CommitTrailers {
@@ -18,6 +26,8 @@ export interface CommitTrailers {
   undoOf?: string | undefined;
   /** Id of the note being deleted (delete op). */
   deleteOf?: string | undefined;
+  /** Original relpath an imported note came from (import op; cli-spec §7.3). */
+  importedFrom?: string | undefined;
   /** Model identifier — set ONLY when an enrichment model touched the body. */
   model?: string | undefined;
 }
@@ -39,6 +49,7 @@ function trailerEntries(t: CommitTrailers): Array<[TrailerKey, string]> {
     'Edit-Of': t.editOf,
     'Undo-Of': t.undoOf,
     'Delete-Of': t.deleteOf,
+    'Imported-From': t.importedFrom,
     Model: t.model,
   };
   const out: Array<[TrailerKey, string]> = [];

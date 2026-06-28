@@ -10,6 +10,7 @@ import {
   cmdCapture,
   cmdCorrect,
   cmdDelete,
+  cmdImport,
   cmdInit,
   cmdList,
   cmdRead,
@@ -37,6 +38,7 @@ commands:
   search QUERY [--limit=N]               FTS5 search over the local index
   list [--group=tag|type|day] [--since=] recent or grouped listing
   tags [--prefix=…]                      tag counts
+  import <path> [--dry-run] [--batch=N]  bulk-import a folder of Markdown
   status                                 workspace + mirror state
   workspaces                             list configured workspaces
 
@@ -56,13 +58,13 @@ const COMMANDS: Record<string, Handler> = {
   search: cmdSearch,
   list: cmdList,
   tags: cmdTags,
+  import: cmdImport,
   status: cmdStatus,
   workspaces: cmdWorkspaces,
 };
 
 // Commands whose landing is sequenced later in Phase 2.
 const PENDING: Record<string, string> = {
-  import: 'Phase 2d (bulk importer)',
   mcp: 'a later Phase 2 unit',
   serve: 'a later Phase 2 unit',
   sync: 'a later Phase 2 unit',

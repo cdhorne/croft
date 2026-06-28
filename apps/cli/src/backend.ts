@@ -23,7 +23,7 @@ export function buildBackend(name: string, ws: WorkspaceConfig): IsomorphicGitBa
   });
 }
 
-function gitAuthor(): { name: string; email: string } {
+export function gitAuthor(): { name: string; email: string } {
   const user = safeUser();
   return {
     name: process.env.GIT_AUTHOR_NAME ?? user,

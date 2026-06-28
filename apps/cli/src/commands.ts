@@ -4,6 +4,7 @@
 
 import { existsSync } from 'node:fs';
 import { assembleNoteFile } from '@zonot/core';
+import { WorkspaceNotInitializedError } from '@zonot/core/errors';
 import type {
   ListGroupBy,
   NoteRecord,
@@ -13,7 +14,7 @@ import type {
 } from '@zonot/core/schema';
 import type { ParsedArgs } from './args.ts';
 import { flagBool, flagNum, flagStr } from './args.ts';
-import { buildBackend } from './backend.ts';
+import { buildBackend, gitAuthor } from './backend.ts';
 import { parseInline } from './capture-parse.ts';
 import {
   ConfigError,
@@ -24,6 +25,7 @@ import {
   saveConfig,
   type WorkspaceConfig,
 } from './config.ts';
+import { planImport, runImport } from './import.ts';
 import { type Index, openIndex } from './index-store.ts';
 import { EXIT, emit, emitLines, makeStyle, wantJson } from './output.ts';
 
@@ -258,6 +260,46 @@ function renderSummary(args: ParsedArgs, r: NoteSummary): string {
   const tags = r.tags.length ? `  ${r.tags.map((t) => s.accent(`#${t}`)).join(' ')}` : '';
   const snippet = r.snippet ? `\n  ${s.muted(r.snippet)}` : '';
   return `${s.bold(r.title || r.id)}  ${s.muted(r.path)}${tags}${snippet}`;
+}
+
+// --- import ----------------------------------------------------------------
+
+export async function cmdImport(args: ParsedArgs): Promise<number> {
+  const path = args.positionals[0];
+  if (!path) throw new ConfigError('missing import path');
+  const { name, ws } = resolveWorkspace(loadConfig(), flagStr(args.flags, 'workspace'));
+  if (!ws.mirror_path) throw new ConfigError(`workspace "${name}" has no mirror_path`);
+  if (!existsSync(`${ws.mirror_path}/.git`)) throw new WorkspaceNotInitializedError(ws.mirror_path);
+
+  const plan = planImport(path, ws.mirror_path);
+  const s = makeStyle(args);
+  const news = plan.notes.filter((n) => n.status === 'new').length;
+  const updates = plan.notes.length - news;
+
+  if (flagBool(args.flags, 'dry-run')) {
+    emitLines(
+      args,
+      plan.notes.map((n) => ({ from: n.relpath, to: n.notePath, status: n.status })),
+      (r) => {
+        const row = r as { from: string; to: string; status: string };
+        return `  ${row.from} ${s.muted('→')} ${row.to} ${s.muted(`(${row.status})`)}`;
+      },
+    );
+    process.stderr.write(
+      `${s.muted(`plan: ${plan.notes.length} notes — ${news} new, ${updates} update`)}\n`,
+    );
+    return EXIT.ok;
+  }
+
+  const batch = flagNum(args.flags, 'batch') ?? 50;
+  const result = await runImport(plan, ws.mirror_path, gitAuthor(), batch);
+  emit(
+    args,
+    { committed: result.committed, commits: result.commits, new: news, update: updates },
+    () =>
+      `${s.accent('✓')} imported ${result.committed} notes in ${result.commits} commit${result.commits === 1 ? '' : 's'}`,
+  );
+  return EXIT.ok;
 }
 
 // --- introspection ---------------------------------------------------------

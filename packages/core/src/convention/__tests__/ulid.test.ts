@@ -1,5 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import { generateUlid, isValidUlid } from '../ulid.ts';
+import { deterministicUlid, generateUlid, isValidUlid } from '../ulid.ts';
+
+describe('deterministicUlid', () => {
+  test('is stable for the same (time, seed), valid, and time-ordered', () => {
+    const a = deterministicUlid(1710000000000, 'notes/inbox.md');
+    expect(deterministicUlid(1710000000000, 'notes/inbox.md')).toBe(a); // stable → idempotent reruns
+    expect(isValidUlid(a)).toBe(true);
+    expect(deterministicUlid(1710000000000, 'other.md')).not.toBe(a); // seed varies the entropy
+    // Later time → lexicographically greater (ULIDs sort by time).
+    expect(deterministicUlid(1720000000000, 'notes/inbox.md') > a).toBe(true);
+  });
+});
 
 describe('generateUlid', () => {
   test('returns a 26-char Crockford base32 string', () => {
