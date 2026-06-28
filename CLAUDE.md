@@ -141,6 +141,23 @@ ADRs. Known up front:
   `http/web` client); the Worker is only a fallback proxy. (ADR-0010)
 - **Provenance lives in commit trailers**, not note frontmatter (`Source`, `Capture-Id`/`Edit-Of`,
   `Model`, plus `Undo-Of`/`Delete-Of` for the correction surface). (ADR-0007/0026)
+- **Cross-package TS resolves from source, not project references.** Consumers import `@zonot/core`
+  via `moduleResolution: Bundler` + package `exports` (which point at `./src/*.ts`); keep
+  `tsc --noEmit` per package. Do **not** add `composite`/`references` build wiring — `tsc -b` (build
+  mode) races with the parallel `tsc --noEmit` checks (lefthook + `pnpm -r`) over the shared
+  `.tsbuild`, yielding `TS6305`. A package that calls `.safeParse` on a core schema needs `zod` as a
+  direct dep (it's a runtime call, not just a type). (Phase 1)
+- **`capture_id := note id` for the capture op.** `undo` (resolves by `capture_id`) and `delete`
+  (by `id`) share one by-id resolution path and differ only by intent trailer — no history scan.
+  Every later mutation event gets its own fresh `Capture-Id`. (ADR-0026, Phase 1)
+- **MCP uses the SDK's web-standard transport directly**, not `agents`' `createMcpHandler`.
+  `WebStandardStreamableHTTPServerTransport` (stateless: omit `sessionIdGenerator`) is the same
+  DO-free transport `createMcpHandler` wraps, minus the heavy `agents` dep — keeps the Worker
+  vendor-neutral (ADR-0022 intent / ADR-0028). Fresh `McpServer`+transport per request (SDK 1.26+).
+  (Phase 1; ADR-0022's literal "createMcpHandler" is the wrapper, not a hard requirement.)
+- **Worker tree-walk reads (`listRecent`/`listTags`) are O(repo) per call** — they parse note blobs
+  on every request because there's no edge index until v1.2 (ADR-0009). Don't build faceted
+  `list`/search on this path; it's the deliberate placeholder the materialized index supersedes. (Phase 1)
 
 ## Running things
 
